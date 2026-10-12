@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { DialogHost } from '@/components/dialog';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { startSync } from '@/sync/sync';
@@ -43,6 +44,7 @@ export default function RootLayout() {
         <Stack.Screen name="trip/[tripId]/family" options={{ title: 'Add family', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/who" options={{ title: 'Which one is you?', presentation: 'modal' }} />
       </Stack>
+      <DialogHost />
     </ThemeProvider>
   );
 }

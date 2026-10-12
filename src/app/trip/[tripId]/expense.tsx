@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
 import { Avatar, Button, Card, Checkbox, EmptyState, Field, IconButton, Segmented } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -176,18 +177,22 @@ function ExpenseForm({ trip, existing }: { trip: StoredTrip; existing?: StoredEx
     router.back();
   };
 
-  const confirmDelete = () =>
-    Alert.alert('Delete this expense?', 'Everyone’s balances will be recalculated.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          deleteExpense(trip.id, existing!.id);
-          router.back();
-        },
+  const confirmDelete = () => {
+    if (!existing) {
+      return;
+    }
+    confirmDialog({
+      icon: 'delete',
+      tone: 'danger',
+      title: 'Delete this expense?',
+      message: 'Everyone’s balances will be recalculated.',
+      confirmLabel: 'Delete expense',
+      onConfirm: () => {
+        deleteExpense(trip.id, existing.id);
+        router.back();
       },
-    ]);
+    });
+  };
 
   const chipColors = (selected: boolean) => ({
     backgroundColor: selected ? theme.primary : theme.backgroundElement,

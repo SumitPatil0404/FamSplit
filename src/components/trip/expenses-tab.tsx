@@ -1,13 +1,14 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { expenseShares, formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay } from '@/store/summary';
-import type { StoredExpense, StoredTrip } from '@/store/trips';
+import { deletePayment, type StoredExpense, type StoredPayment, type StoredTrip } from '@/store/trips';
 
 const EMOJI: [RegExp, string][] = [
   [/cab|taxi|auto|uber|ola|fuel|petrol|diesel|toll|bus|train|parking/i, '🚕'],
@@ -89,6 +90,56 @@ function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpens
   );
 }
 
+/** A settlement payment, shown in the same list so the trip reads as one timeline. */
+function PaymentRow({ trip, payment }: { trip: StoredTrip; payment: StoredPayment }) {
+  const theme = useTheme();
+  const from = trip.members.find((member) => member.id === payment.fromMemberId);
+  const to = trip.members.find((member) => member.id === payment.toMemberId);
+  const fromName = from?.name ?? 'Someone';
+  const toName = to?.name ?? 'someone';
+  const family = trip.families.find((candidate) => candidate.id === from?.familyId);
+  const where = from && to && from.familyId === to.familyId ? `Inside the ${family?.name ?? ''} family` : 'Between families';
+
+  const confirmUndo = () =>
+    confirmDialog({
+      icon: 'undo',
+      tone: 'danger',
+      title: 'Undo this payment?',
+      message: `${fromName} will owe ${toName} ${formatPaise(payment.amount)} again.`,
+      confirmLabel: 'Undo payment',
+      cancelLabel: 'Keep it',
+      onConfirm: () => deletePayment(trip.id, payment.id),
+    });
+
+  return (
+    <Pressable accessibilityRole="button" onPress={confirmUndo} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
+      <Card style={styles.row}>
+        <View style={[styles.tile, { backgroundColor: theme.positiveSoft }]}>
+          <ThemedText allowFontScaling={false} style={styles.emoji}>
+            🤝
+          </ThemedText>
+        </View>
+        <View style={styles.grow}>
+          <ThemedText type="bold">
+            {fromName} paid {toName}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {formatDay(payment.date)} · {where}
+          </ThemedText>
+        </View>
+        <View style={styles.effect}>
+          <ThemedText type="caption" numberOfLines={1} themeColor="positive">
+            settled
+          </ThemedText>
+          <ThemedText type="smallBold" numberOfLines={1} themeColor="positive">
+            {formatPaise(payment.amount)}
+          </ThemedText>
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
 export function ExpensesTab({ trip, onAddFamily, onAddExpense }: { trip: StoredTrip; onAddFamily: () => void; onAddExpense: () => void }) {
   if (trip.families.length < 2) {
     return (
@@ -101,7 +152,7 @@ export function ExpensesTab({ trip, onAddFamily, onAddExpense }: { trip: StoredT
     );
   }
 
-  if (trip.expenses.length === 0) {
+  if (trip.expenses.length === 0 && trip.payments.length === 0) {
     return (
       <EmptyState emoji="🧾" title="No expenses yet" body="Add the first thing someone paid for. Anyone in any family can be the payer.">
         <Button label="Add an expense" icon="add" onPress={onAddExpense} style={styles.cta} />
@@ -109,14 +160,23 @@ export function ExpensesTab({ trip, onAddFamily, onAddExpense }: { trip: StoredT
     );
   }
 
+  const timeline = [
+    ...trip.expenses.map((item) => ({ kind: 'expense' as const, item })),
+    ...trip.payments.map((item) => ({ kind: 'payment' as const, item })),
+  ].sort((a, b) => b.item.date.localeCompare(a.item.date));
+
   return (
     <View style={styles.list}>
       <ThemedText type="caption" themeColor="textSecondary">
         “You” means your whole family on this trip
       </ThemedText>
-      {trip.expenses.map((expense) => (
-        <ExpenseRow key={expense.id} trip={trip} expense={expense} />
-      ))}
+      {timeline.map((entry) =>
+        entry.kind === 'expense' ? (
+          <ExpenseRow key={entry.item.id} trip={trip} expense={entry.item} />
+        ) : (
+          <PaymentRow key={entry.item.id} trip={trip} payment={entry.item} />
+        ),
+      )}
     </View>
   );
 }

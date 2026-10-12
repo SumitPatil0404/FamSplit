@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 
+import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState, Field } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -81,16 +82,16 @@ export default function AccountScreen() {
   }
 
   const confirmSignOut = () =>
-    Alert.alert(
-      'Sign out?',
-      hasUnsentChanges()
+    confirmDialog({
+      icon: 'logout',
+      tone: 'danger',
+      title: 'Sign out?',
+      message: hasUnsentChanges()
         ? 'Some changes have not reached the server yet and will be lost. Shared trips come back when you sign in again.'
         : 'Shared trips are removed from this phone and come back when you sign in again.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-      ],
-    );
+      confirmLabel: 'Sign out',
+      onConfirm: () => void signOut(),
+    });
 
   return (
     <ScrollView contentContainerStyle={styles.content}>

@@ -1,8 +1,9 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { Button, EmptyState, Field, IconButton } from '@/components/ui';
@@ -70,18 +71,22 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
     router.back();
   };
 
-  const confirmDelete = () =>
-    Alert.alert(`Remove the ${existing!.name} family?`, 'They are not part of any expense, so nothing else changes.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          deleteFamily(trip.id, existing!.id);
-          router.back();
-        },
+  const confirmDelete = () => {
+    if (!existing) {
+      return;
+    }
+    confirmDialog({
+      icon: 'delete',
+      tone: 'danger',
+      title: `Remove the ${existing.name} family?`,
+      message: 'They are not part of any expense, so nothing else changes.',
+      confirmLabel: 'Remove family',
+      onConfirm: () => {
+        deleteFamily(trip.id, existing.id);
+        router.back();
       },
-    ]);
+    });
+  };
 
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>

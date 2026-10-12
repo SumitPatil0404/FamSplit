@@ -21,6 +21,8 @@ const icons = {
   person: { ios: 'person.crop.circle', android: 'account_circle' },
   share: { ios: 'square.and.arrow.up', android: 'share' },
   link: { ios: 'link', android: 'link' },
+  lock: { ios: 'lock.fill', android: 'lock' },
+  logout: { ios: 'rectangle.portrait.and.arrow.right', android: 'logout' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

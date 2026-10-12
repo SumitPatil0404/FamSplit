@@ -41,7 +41,7 @@ export function Avatar({ name, color, size = 40 }: { name: string; color: string
 type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'soft' | 'danger';
+  variant?: 'primary' | 'soft' | 'danger' | 'destructive';
   icon?: IconName;
   disabled?: boolean;
   compact?: boolean;
@@ -54,6 +54,7 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, co
     primary: { background: theme.primary, text: theme.onPrimary },
     soft: { background: theme.primarySoft, text: theme.primary },
     danger: { background: theme.negativeSoft, text: theme.negative },
+    destructive: { background: theme.negative, text: '#FFFFFF' },
   }[variant];
 
   return (

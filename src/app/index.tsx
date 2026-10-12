@@ -1,7 +1,8 @@
 import { Stack, useRouter } from 'expo-router';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { BalancePill, Button, Card, EmptyState, Fab, IconButton } from '@/components/ui';
@@ -21,18 +22,18 @@ function TripCard({ trip }: { trip: StoredTrip }) {
   // Someone else's trip can only be left; your own is deleted for everyone.
   const leaving = isShared(trip.id) && trip.createdBy !== sync.session?.user.id;
   const confirmDelete = () =>
-    Alert.alert(
-      leaving ? `Leave "${trip.name}"?` : `Delete "${trip.name}"?`,
-      leaving
+    confirmDialog({
+      icon: leaving ? 'logout' : 'delete',
+      tone: 'danger',
+      title: leaving ? `Leave "${trip.name}"?` : `Delete "${trip.name}"?`,
+      message: leaving
         ? 'It is removed from this phone. The other families keep it, and you can join again with the code.'
         : isShared(trip.id)
           ? 'All its families, expenses and payments are deleted for everyone on the trip.'
           : 'All its families, expenses and payments will be removed from this phone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: leaving ? 'Leave' : 'Delete', style: 'destructive', onPress: () => deleteTrip(trip.id) },
-      ],
-    );
+      confirmLabel: leaving ? 'Leave trip' : 'Delete trip',
+      onConfirm: () => deleteTrip(trip.id),
+    });
 
   return (
     <Pressable
