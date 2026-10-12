@@ -132,6 +132,12 @@ revoke execute on function public.join_trip(text) from public, anon;
 grant execute on function public.join_trip(text) to authenticated;
 revoke execute on function public.add_trip_creator() from public, anon, authenticated;
 
+-- Signed-in users reach the tables through the API; the policies below decide which rows.
+-- Nothing is granted to the anonymous role.
+grant select, insert, update, delete on
+  public.trips, public.trip_users, public.families, public.members, public.expenses, public.payments
+  to authenticated;
+
 alter table public.trips enable row level security;
 alter table public.trip_users enable row level security;
 alter table public.families enable row level security;
