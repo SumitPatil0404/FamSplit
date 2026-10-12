@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Delete your FamSplit account</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; font-family: system-ui, -apple-system, Roboto, sans-serif; background: #f5f5fa; color: #15141f; }
+  main { max-width: 440px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  p, li { color: #6e6c80; line-height: 1.5; }
+  ul { padding-left: 20px; }
+  form { background: #fff; border: 1px solid #e7e6f0; border-radius: 16px; padding: 20px; margin-top: 24px; }
+  label { display: block; font-size: 14px; font-weight: 700; color: #6e6c80; margin: 12px 0 4px; }
+  input { width: 100%; box-sizing: border-box; min-height: 48px; padding: 8px 14px; font-size: 16px; border: 1px solid #e7e6f0; border-radius: 12px; }
+  button { width: 100%; min-height: 52px; margin-top: 20px; border: 0; border-radius: 999px; background: #e5484d; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #message { margin-top: 16px; font-weight: 600; }
+  #message.error { color: #e5484d; }
+  #message.done { color: #0b8a5f; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Delete your FamSplit account</h1>
+  <p>Sign in below to permanently delete your FamSplit account. You can also do this in the app under Account.</p>
+  <ul>
+    <li>Your sign-in is removed for good.</li>
+    <li>Trips only you are on are deleted, with their expenses and payments.</li>
+    <li>Trips you share with other families stay for them, with your name still shown on those trips.</li>
+    <li>This cannot be undone.</li>
+  </ul>
+
+  <form id="form">
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" required />
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required />
+    <button id="submit" type="submit">Delete my account</button>
+    <div id="message" role="status"></div>
+  </form>
+</main>
+<script>
+  // These identify the FamSplit project and are the same public values the app itself ships with.
+  const PROJECT_URL = 'https://rkbbtjpvqjhmiuytfjtq.supabase.co';
+  const PUBLIC_KEY = 'sb_publishable_C15T764IJGvYAscqgb1PJg_wlkXUJS-';
+
+  const form = document.getElementById('form');
+  const button = document.getElementById('submit');
+  const message = document.getElementById('message');
+  const show = (text, kind) => { message.textContent = text; message.className = kind; };
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!confirm('Delete your FamSplit account for good? This cannot be undone.')) return;
+    button.disabled = true;
+    show('Working…', '');
+    try {
+      const signIn = await fetch(`${PROJECT_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { apikey: PUBLIC_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email.value.trim(), password: form.password.value }),
+      });
+      if (!signIn.ok) throw new Error('That email and password do not match an account.');
+      const { access_token } = await signIn.json();
+
+      const removal = await fetch(`${PROJECT_URL}/functions/v1/delete-account`, {
+        method: 'POST',
+        headers: { apikey: PUBLIC_KEY, Authorization: `Bearer ${access_token}` },
+      });
+      if (!removal.ok) throw new Error('The account could not be deleted. Please try again in a few minutes.');
+
+      form.reset();
+      show('Your account has been deleted.', 'done');
+    } catch (error) {
+      show(error.message || 'Something went wrong. Please try again.', 'error');
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

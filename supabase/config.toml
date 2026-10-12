@@ -1,3 +1,7 @@
 # The notify function is called by the database, not by a signed-in user (see its header comment).
 [functions.notify]
 verify_jwt = false
+
+# Checks the caller's sign-in token itself, so that the web deletion page can call it too.
+[functions.delete-account]
+verify_jwt = false

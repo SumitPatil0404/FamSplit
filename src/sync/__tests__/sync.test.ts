@@ -100,6 +100,23 @@ class FakeServer {
     }
   }
 
+  /** Mimics the delete-account function: the sign-in goes, and with it the user's trip links. */
+  deleteUser(functionName: string, userId: string): { message: string } | null {
+    if (this.offline || functionName !== 'delete-account') {
+      return { message: 'Failed to send a request to the Edge Function' };
+    }
+    const soleTrips = this.tables.trips.filter(
+      (trip) => trip.created_by === userId && !this.tables.trip_users.some((link) => link.trip_id === trip.id && link.user_id !== userId),
+    );
+    for (const trip of soleTrips) {
+      for (const table of Object.keys(this.tables)) {
+        this.tables[table] = this.tables[table].filter((row) => (table === 'trips' ? row.id : row.trip_id) !== trip.id);
+      }
+    }
+    this.tables.trip_users = this.tables.trip_users.filter((link) => link.user_id !== userId);
+    return null;
+  }
+
   joinTrip(userId: string, code: string): Result {
     const trip = this.tables.trips.find((row) => row.invite_code === code.replace(/[^A-Za-z0-9]/g, '').toUpperCase());
     if (!trip) {
@@ -185,6 +202,9 @@ function fakeClient(server: FakeServer, userId: string) {
       startAutoRefresh: async () => {},
       stopAutoRefresh: async () => {},
       signOut: async () => ({ error: null }),
+    },
+    functions: {
+      invoke: async (name: string) => ({ data: null, error: server.deleteUser(name, userId) }),
     },
   };
 }
@@ -432,6 +452,26 @@ describe('sync between two phones', () => {
     await alice.sync.syncNow();
     expect(server.tables.trips.map((row) => row.id)).toEqual([tripId]);
     expect(alice.store.getTrips().map((candidate) => candidate.id)).toEqual([tripId]);
+  });
+
+  it('deleting an account clears this phone but leaves shared trips for the others', async () => {
+    await bob.sync.joinTrip(trip(alice)!.inviteCode);
+    const solo = alice.store.createTrip({ name: 'Solo', myName: 'Alice', familyName: 'Sharma' });
+    await alice.sync.syncNow();
+
+    server.offline = true;
+    expect(await alice.sync.deleteAccount()).toMatch(/reach the server/);
+    expect(alice.store.getTrips()).toHaveLength(2);
+
+    server.offline = false;
+    expect(await alice.sync.deleteAccount()).toBeNull();
+    expect(alice.store.getTrips()).toEqual([]);
+    expect(alice.sync.isShared(tripId)).toBe(false);
+    expect(server.tables.trips.map((row) => row.id)).toEqual([tripId]);
+    expect(server.tables.trips.map((row) => row.id)).not.toContain(solo);
+
+    await bob.sync.syncNow();
+    expect(trip(bob)!.name).toBe('Goa');
   });
 
   it('on sign-out removes shared trips from the phone but keeps ones never uploaded', async () => {

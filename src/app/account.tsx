@@ -5,7 +5,8 @@ import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, EmptyState, Field } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { hasUnsentChanges, signIn, signOut, signUp, syncNow, useSync } from '@/sync/sync';
+import { showToast } from '@/components/toast';
+import { deleteAccount, hasUnsentChanges, signIn, signOut, signUp, syncNow, useSync } from '@/sync/sync';
 
 function SignInForm() {
   const [email, setEmail] = useState('');
@@ -93,6 +94,25 @@ export default function AccountScreen() {
       onConfirm: () => void signOut(),
     });
 
+  const confirmDelete = () =>
+    confirmDialog({
+      icon: 'delete',
+      tone: 'danger',
+      title: 'Delete your account?',
+      message:
+        'Your sign-in is removed for good. Trips only you are on are deleted. Trips you share with other families stay for them, with your name still on those trips. This cannot be undone.',
+      confirmLabel: 'Delete my account',
+      cancelLabel: 'Keep my account',
+      onConfirm: async () => {
+        const problem = await deleteAccount();
+        if (problem) {
+          confirmDialog({ icon: 'delete', title: 'Account not deleted', message: problem, confirmLabel: 'OK', hideCancel: true });
+        } else {
+          showToast({ icon: 'check', title: 'Account deleted', body: 'Your sign-in and your trips have been removed.' });
+        }
+      },
+    });
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Card>
@@ -113,7 +133,14 @@ export default function AccountScreen() {
         <View style={styles.spacer} />
         <Button label="Sync now" variant="soft" onPress={() => void syncNow()} disabled={sync.status === 'syncing'} />
       </Card>
-      <Button label="Sign out" variant="danger" onPress={confirmSignOut} />
+      <Button label="Sign out" variant="soft" onPress={confirmSignOut} />
+
+      <View style={styles.dangerZone}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Deleting your account removes your sign-in and the trips only you are on. It cannot be undone.
+        </ThemedText>
+        <Button label="Delete account" icon="delete" variant="danger" onPress={confirmDelete} />
+      </View>
     </ScrollView>
   );
 }
@@ -128,5 +155,9 @@ const styles = StyleSheet.create({
   },
   spacer: {
     height: Spacing.one,
+  },
+  dangerZone: {
+    gap: Spacing.two,
+    marginTop: Spacing.four,
   },
 });

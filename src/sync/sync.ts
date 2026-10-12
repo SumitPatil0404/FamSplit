@@ -470,3 +470,26 @@ export async function sendReminder(
   }
   return Number(data) || 0;
 }
+
+/**
+ * Permanently deletes the signed-in account on the server, then clears it from this phone.
+ * Returns an error message, or null when it worked.
+ */
+export async function deleteAccount(): Promise<string | null> {
+  if (!supabase || !state.session) {
+    return 'You are not signed in.';
+  }
+  const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
+  if (error) {
+    return /network|fetch|failed to send/i.test(error.message)
+      ? 'Can’t reach the server. Check your connection and try again.'
+      : 'The account could not be deleted. Please try again.';
+  }
+  // The server-side session went with the account, so only this phone is left to clear.
+  await supabase.auth.signOut({ scope: 'local' });
+  applyRemoteTrips(getTrips().filter((trip) => !bases[trip.id]));
+  bases = {};
+  removals = [];
+  persist();
+  return null;
+}
