@@ -11,7 +11,10 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { importPKCS8, SignJWT } from 'npm:jose@5';
 
 type Row = Record<string, any>;
-type Message = { title: string; body: string; tripId: string; userIds: string[] };
+type Message = { kind: 'activity' | 'reminder'; title: string; body: string; tripId: string; userIds: string[] };
+
+/** The app's violet, so the icon and app name in the notification match the app. */
+const BRAND_COLOR = '#6C4DF6';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const account = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT') ?? '{}');
@@ -71,8 +74,16 @@ async function send(message: Message): Promise<number> {
           message: {
             token: phone,
             notification: { title: message.title, body: message.body },
-            data: { tripId: message.tripId },
-            android: { priority: 'HIGH', notification: { channel_id: 'default' } },
+            data: { tripId: message.tripId, kind: message.kind },
+            android: {
+              priority: 'HIGH',
+              notification: {
+                channel_id: message.kind === 'reminder' ? 'reminders' : 'default',
+                color: BRAND_COLOR,
+                // A repeated reminder for the same trip replaces the earlier one instead of piling up.
+                ...(message.kind === 'reminder' ? { tag: `reminder:${message.tripId}` } : {}),
+              },
+            },
           },
         }),
       });
@@ -152,7 +163,7 @@ async function activityMessage(id: number): Promise<Message | null> {
   // Everyone on the trip except whoever made the change.
   const { data: users } = await admin.from('trip_users').select('user_id').eq('trip_id', row.trip_id);
   const userIds = (users ?? []).map((user: Row) => user.user_id).filter((userId: string) => userId !== row.actor_id);
-  return { title: tripName, body, tripId: row.trip_id, userIds };
+  return { kind: 'activity', title: tripName, body, tripId: row.trip_id, userIds };
 }
 
 async function reminderMessage(id: number): Promise<Message | null> {
@@ -167,6 +178,7 @@ async function reminderMessage(id: number): Promise<Message | null> {
     sender: row.created_by,
   });
   return {
+    kind: 'reminder',
     title: `Reminder · ${tripName}`,
     body: `${name(row.from_member_id)} owes ${name(row.to_member_id)} ${rupees(row.amount)}. Open FamSplit to settle up.`,
     tripId: row.trip_id,

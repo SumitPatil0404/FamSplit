@@ -3,6 +3,9 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
 
+import { showToast } from '@/components/toast';
+import { Colors } from '@/constants/theme';
+
 type Notifications = typeof import('expo-notifications');
 
 /** Expo Go cannot receive push notifications on Android, so all of this only runs in a real build. */
@@ -32,9 +35,18 @@ export async function registerForPush(client: SupabaseClient): Promise<void> {
   try {
     const push = notifications();
     if (Platform.OS === 'android') {
+      // Two channels, so reminders can be silenced in Android's settings without losing trip updates.
       await push.setNotificationChannelAsync('default', {
         name: 'Trip updates',
+        description: 'Expenses and payments added or changed by others on your trips',
         importance: push.AndroidImportance.HIGH,
+        lightColor: Colors.light.primary,
+      });
+      await push.setNotificationChannelAsync('reminders', {
+        name: 'Payment reminders',
+        description: 'When someone reminds you that a payment is due',
+        importance: push.AndroidImportance.HIGH,
+        lightColor: Colors.light.primary,
       });
     }
     let { granted } = await push.getPermissionsAsync();
@@ -74,22 +86,33 @@ export function startPushListeners(onNotification: () => void): void {
   listening = true;
   try {
     const push = notifications();
-    push.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: false,
-      }),
-    });
-    push.addNotificationReceivedListener(onNotification);
-
     const openTrip = (tripId: unknown) => {
       if (typeof tripId === 'string' && tripId !== '') {
         // Wait a moment so navigation is ready when the tap is what launched the app.
         setTimeout(() => router.push(`/trip/${tripId}`), 300);
       }
     };
+
+    // While the app is open, a notification appears as the app's own banner instead of Android's.
+    push.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: false,
+        shouldShowList: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+    push.addNotificationReceivedListener((notification) => {
+      const { title, body, data } = notification.request.content;
+      showToast({
+        title: title ?? 'FamSplit',
+        body: body ?? '',
+        icon: data?.kind === 'reminder' ? 'bell' : 'trip',
+        onPress: () => openTrip(data?.tripId),
+      });
+      onNotification();
+    });
+
     push.addNotificationResponseReceivedListener((response) => openTrip(response.notification.request.content.data?.tripId));
     openTrip(push.getLastNotificationResponse()?.notification.request.content.data?.tripId);
   } catch (error) {
