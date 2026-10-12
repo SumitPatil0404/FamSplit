@@ -1,0 +1,3 @@
+# The notify function is called by the database, not by a signed-in user (see its header comment).
+[functions.notify]
+verify_jwt = false

@@ -3,6 +3,7 @@ import Storage from 'expo-sqlite/kv-store';
 import { useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
+import { registerForPush, startPushListeners, unregisterFromPush } from '@/notifications/push';
 import { applyRemoteTrips, getTrips, setLocalChangeListener, type StoredTrip } from '@/store/trips';
 
 import {
@@ -333,6 +334,7 @@ function setSession(session: Session | null) {
     } catch {
       // Live updates are a bonus; syncing on demand and on app open still works without them.
     }
+    void registerForPush(supabase);
     requestSync(0);
   }
 }
@@ -356,6 +358,9 @@ export function startSync() {
     }
     requestSync();
   });
+
+  // A notification means something changed, so fetch it straight away.
+  startPushListeners(() => requestSync(0));
 
   void client.auth.getSession().then(({ data }) => setSession(data.session));
   client.auth.onAuthStateChange((_event, session) => setSession(session));
@@ -408,6 +413,7 @@ export async function signOut() {
   if (!supabase) {
     return;
   }
+  await unregisterFromPush(supabase);
   await supabase.auth.signOut();
   // Shared trips live on the server and come back at the next sign-in; trips never uploaded stay on the phone.
   applyRemoteTrips(getTrips().filter((trip) => !bases[trip.id]));
@@ -439,4 +445,28 @@ export function usePullToSync(): { refreshing: boolean; onRefresh: () => void } 
       void syncNow().finally(() => setRefreshing(false));
     },
   };
+}
+
+/**
+ * Sends a "please pay" push notification to whoever owes the money. Returns how many phones it
+ * reaches: 0 means they do not use the app, so they have to be reminded some other way.
+ * Throws with a readable message, for example when a reminder was sent only minutes ago.
+ */
+export async function sendReminder(
+  tripId: string,
+  transfer: { fromMemberId: string; toMemberId: string; amount: number },
+): Promise<number> {
+  if (!supabase || !state.session) {
+    return 0;
+  }
+  const { data, error } = await supabase.rpc('send_reminder', {
+    trip: tripId,
+    from_member: transfer.fromMemberId,
+    to_member: transfer.toMemberId,
+    owed: transfer.amount,
+  });
+  if (error) {
+    throw new Error(describe(error));
+  }
+  return Number(data) || 0;
 }

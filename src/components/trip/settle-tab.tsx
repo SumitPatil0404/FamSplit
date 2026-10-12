@@ -11,7 +11,7 @@ import { shareTripSummary } from '@/export/share';
 import { useTheme } from '@/hooks/use-theme';
 import type { TripSummary } from '@/store/summary';
 import { addPayment, canFinalize, finalizeTrip, type StoredTrip } from '@/store/trips';
-import { useSync } from '@/sync/sync';
+import { isShared, sendReminder, useSync } from '@/sync/sync';
 
 function lookups(trip: StoredTrip) {
   const member = (memberId: string) => trip.members.find((candidate) => candidate.id === memberId);
@@ -30,9 +30,10 @@ type TransferRowProps = {
   betweenFamilies?: boolean;
   /** Shown for information only; it cannot be paid or marked as paid yet. */
   locked?: boolean;
+  signedIn: boolean;
 };
 
-function TransferRow({ trip, transfer, betweenFamilies, locked }: TransferRowProps) {
+function TransferRow({ trip, transfer, betweenFamilies, locked, signedIn }: TransferRowProps) {
   const { member, name, familyName, color } = lookups(trip);
   const from = name(transfer.fromMemberId);
   const to = name(transfer.toMemberId);
@@ -75,7 +76,7 @@ function TransferRow({ trip, transfer, betweenFamilies, locked }: TransferRowPro
     }
   };
 
-  const remind = () =>
+  const sendMessage = () =>
     Share.share({
       message:
         `Hi ${from}, a reminder from our “${trip.name}” trip on FamSplit: ` +
@@ -84,6 +85,43 @@ function TransferRow({ trip, transfer, betweenFamilies, locked }: TransferRowPro
           : `you owe ${to} ${amount}.`) +
         (payeeUpi ? ` UPI: ${payeeUpi}` : ''),
     });
+
+  // A reminder is a push notification to their phone. Only someone who does not use the app, or
+  // a trip that is not shared, falls back to a message through another app.
+  const remind = async () => {
+    if (!signedIn || !isShared(trip.id)) {
+      void sendMessage();
+      return;
+    }
+    try {
+      const phones = await sendReminder(trip.id, transfer);
+      if (phones > 0) {
+        confirmDialog({
+          icon: 'bell',
+          title: 'Reminder sent',
+          message: `${from} gets a notification that ${amount} is due.`,
+          confirmLabel: 'OK',
+          hideCancel: true,
+        });
+      } else {
+        confirmDialog({
+          icon: 'bell',
+          title: `${from} is not on FamSplit yet`,
+          message: 'There is no phone to notify. You can send them a message instead.',
+          confirmLabel: 'Send a message',
+          onConfirm: () => void sendMessage(),
+        });
+      }
+    } catch (error) {
+      confirmDialog({
+        icon: 'bell',
+        title: 'Reminder not sent',
+        message: error instanceof Error ? error.message : 'Something went wrong.',
+        confirmLabel: 'OK',
+        hideCancel: true,
+      });
+    }
+  };
 
   return (
     <View style={styles.transfer}>
@@ -207,7 +245,7 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
       ) : (
         betweenFamilies.map((transfer) => (
           <Card key={`${transfer.fromFamilyId}-${transfer.toFamilyId}`}>
-            <TransferRow trip={trip} transfer={transfer} betweenFamilies />
+            <TransferRow trip={trip} transfer={transfer} betweenFamilies signedIn={sync.session !== null} />
           </Card>
         ))
       )}
@@ -246,6 +284,7 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
                 trip={trip}
                 transfer={transfer}
                 locked={locked}
+                signedIn={sync.session !== null}
               />
             ))}
           </View>

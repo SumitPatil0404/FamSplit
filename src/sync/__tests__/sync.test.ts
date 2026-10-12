@@ -208,6 +208,11 @@ async function makePhone(server: FakeServer, userId: string): Promise<Phone> {
     }));
     jest.doMock('@/constants/theme', () => ({ FamilyColors: ['#111111', '#222222', '#333333'] }));
     jest.doMock('../supabase', () => ({ supabase: fakeClient(server, userId) }));
+    jest.doMock('@/notifications/push', () => ({
+      registerForPush: async () => {},
+      unregisterFromPush: async () => {},
+      startPushListeners: () => {},
+    }));
     // require() is the only way to load a fresh copy inside isolateModules.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     phone = { store: require('@/store/trips'), sync: require('../sync') };

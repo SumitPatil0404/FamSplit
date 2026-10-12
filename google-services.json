@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "155257119104",
+    "project_id": "famsplit-75fca",
+    "storage_bucket": "famsplit-75fca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:155257119104:android:427952d21e4aecc037e165",
+        "android_client_info": {
+          "package_name": "com.sumitpatil.famsplit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAE1iuSYoT6HZm2JcKD8OGFp6YPab8Kwr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
