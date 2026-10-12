@@ -1,18 +1,48 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/hooks/use-theme';
+import { startSync } from '@/sync/sync';
 
-SplashScreen.preventAutoHideAsync();
+export default function RootLayout() {
+  const colors = useTheme();
+  const base = useColorScheme() === 'dark' ? DarkTheme : DefaultTheme;
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(startSync, []);
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+    <ThemeProvider
+      value={{
+        ...base,
+        colors: {
+          ...base.colors,
+          primary: colors.primary,
+          background: colors.background,
+          card: colors.background,
+          text: colors.text,
+          border: colors.border,
+        },
+      }}>
+      <StatusBar style="auto" />
+      <Stack
+        screenOptions={{
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerTitleStyle: { fontWeight: '700' },
+          contentStyle: { backgroundColor: colors.background },
+        }}>
+        <Stack.Screen name="index" options={{ title: 'FamSplit' }} />
+        <Stack.Screen name="new-trip" options={{ title: 'New trip', presentation: 'modal' }} />
+        <Stack.Screen name="account" options={{ title: 'Account', presentation: 'modal' }} />
+        <Stack.Screen name="join" options={{ title: 'Join a trip', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
+        <Stack.Screen name="trip/[tripId]/expense" options={{ title: 'Add expense', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/family" options={{ title: 'Add family', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/who" options={{ title: 'Which one is you?', presentation: 'modal' }} />
+      </Stack>
     </ThemeProvider>
   );
 }

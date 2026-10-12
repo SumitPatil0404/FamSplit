@@ -1,30 +1,53 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import '@/global.css';
 
 import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#15141F',
+    textSecondary: '#6E6C80',
+    background: '#F5F5FA',
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#ECEBF5',
+    border: '#E7E6F0',
+    primary: '#6C4DF6',
+    primarySoft: '#EEEAFE',
+    onPrimary: '#FFFFFF',
+    positive: '#0B8A5F',
+    positiveSoft: '#DDF6EC',
+    negative: '#E5484D',
+    negativeSoft: '#FDECEC',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#F4F3FA',
+    textSecondary: '#A3A1B5',
+    background: '#0F0E17',
+    backgroundElement: '#1B1A27',
+    backgroundSelected: '#2A2938',
+    border: '#2A2938',
+    primary: '#8E78FF',
+    primarySoft: '#2A2450',
+    onPrimary: '#FFFFFF',
+    positive: '#34D399',
+    positiveSoft: '#123A2E',
+    negative: '#FF8580',
+    negativeSoft: '#45201F',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+
+/** Each family gets one of these so its people are recognisable at a glance. */
+export const FamilyColors = [
+  '#6C4DF6',
+  '#10B981',
+  '#F59E0B',
+  '#EF5DA8',
+  '#0EA5E9',
+  '#F4635E',
+  '#84CC16',
+  '#A855F7',
+] as const;
 
 export const Fonts = Platform.select({
   ios: {
@@ -61,5 +84,11 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const Radius = {
+  small: 10,
+  medium: 16,
+  large: 24,
+  pill: 999,
+} as const;
+
 export const MaxContentWidth = 800;
