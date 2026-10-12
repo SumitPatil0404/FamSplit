@@ -75,11 +75,23 @@ export function useSync(): SyncState {
   return useSyncExternalStore(subscribe, getState, getState);
 }
 
+/** The server's sign-in errors, reworded for someone who is not a developer. */
+const FRIENDLY: [RegExp, string][] = [
+  [/invalid login credentials/i, 'That email and password do not match.'],
+  [/token has expired|otp.*(expired|invalid)|invalid.*token/i, 'That code is wrong or has expired. Ask for a new one.'],
+  [/rate limit|only request this after|too many/i, 'Too many emails were requested. Wait a few minutes and try again.'],
+  [/already registered|already been registered/i, 'There is already an account with that email. Sign in instead.'],
+  [/password should be|weak password/i, 'Choose a longer password, at least 6 characters.'],
+  [/should be different from the old password/i, 'Choose a password you have not used on this account before.'],
+  [/unable to validate email|invalid email/i, 'That does not look like an email address.'],
+];
+
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String((error as { message?: string })?.message ?? error);
-  return /network|fetch|timed? ?out/i.test(message)
-    ? 'Can’t reach the server. Changes are saved on this phone and will sync later.'
-    : message;
+  if (/network|fetch|timed? ?out/i.test(message)) {
+    return 'Can’t reach the server. Changes are saved on this phone and will sync later.';
+  }
+  return FRIENDLY.find(([pattern]) => pattern.test(message))?.[1] ?? message;
 }
 
 async function fetchAll<Row>(client: SupabaseClient, table: string, orderBy: string[]): Promise<Row[]> {
@@ -388,12 +400,54 @@ export function hasUnsentChanges(): boolean {
   );
 }
 
-/** Returns an error message, or null when it worked. */
-export async function signIn(email: string, password: string): Promise<string | null> {
+/** `confirmEmail` means the account exists but its email has not been confirmed with a code yet. */
+export async function signIn(email: string, password: string): Promise<{ error?: string; confirmEmail?: boolean }> {
+  if (!supabase) {
+    return { error: 'Sharing is not set up in this build.' };
+  }
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error && /not confirmed/i.test(error.message)) {
+    return { confirmEmail: true };
+  }
+  return error ? { error: describe(error) } : {};
+}
+
+/** Finishes creating an account with the code that was emailed. Returns an error message, or null when it worked. */
+export async function confirmEmail(email: string, code: string): Promise<string | null> {
   if (!supabase) {
     return 'Sharing is not set up in this build.';
   }
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
+  return error ? describe(error) : null;
+}
+
+export async function resendConfirmation(email: string): Promise<string | null> {
+  if (!supabase) {
+    return 'Sharing is not set up in this build.';
+  }
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
+  return error ? describe(error) : null;
+}
+
+/** Emails a code for choosing a new password. Returns an error message, or null when it was sent. */
+export async function requestPasswordReset(email: string): Promise<string | null> {
+  if (!supabase) {
+    return 'Sharing is not set up in this build.';
+  }
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  return error ? describe(error) : null;
+}
+
+/** Checks the emailed code, sets the new password, and leaves the user signed in. */
+export async function resetPassword(email: string, code: string, newPassword: string): Promise<string | null> {
+  if (!supabase) {
+    return 'Sharing is not set up in this build.';
+  }
+  const verified = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' });
+  if (verified.error) {
+    return describe(verified.error);
+  }
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
   return error ? describe(error) : null;
 }
 
