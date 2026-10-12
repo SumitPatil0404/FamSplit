@@ -43,6 +43,7 @@ export default function RootLayout() {
         <Stack.Screen name="trip/[tripId]/expense" options={{ title: 'Add expense', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/family" options={{ title: 'Add family', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/who" options={{ title: 'Which one is you?', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/activity" options={{ title: 'Activity', presentation: 'modal' }} />
       </Stack>
       <DialogHost />
     </ThemeProvider>

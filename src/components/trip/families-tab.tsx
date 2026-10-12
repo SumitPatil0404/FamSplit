@@ -13,6 +13,7 @@ import { isShared, useSync } from '@/sync/sync';
 type Props = {
   trip: StoredTrip;
   summary: TripSummary;
+  finalised: boolean;
   onAddFamily: () => void;
   onEditFamily: (familyId: string) => void;
   onChooseMe: () => void;
@@ -70,7 +71,7 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
   );
 }
 
-export function FamiliesTab({ trip, summary, onAddFamily, onEditFamily, onChooseMe }: Props) {
+export function FamiliesTab({ trip, summary, finalised, onAddFamily, onEditFamily, onChooseMe }: Props) {
   const theme = useTheme();
 
   return (
@@ -123,7 +124,7 @@ export function FamiliesTab({ trip, summary, onAddFamily, onEditFamily, onChoose
         );
       })}
 
-      <Button label="Add a family" icon="groupAdd" variant="soft" onPress={onAddFamily} />
+      {!finalised && <Button label="Add a family" icon="groupAdd" variant="soft" onPress={onAddFamily} />}
       <Pressable accessibilityRole="button" hitSlop={8} onPress={onChooseMe} style={styles.link}>
         <ThemedText type="smallBold" themeColor="primary">
           {trip.meId ? 'Not you? Change who you are' : 'Tell us which one is you'}

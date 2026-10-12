@@ -8,7 +8,17 @@ type Row = Record<string, any>;
 type Result = { data: any; error: { message: string } | null };
 
 class FakeServer {
-  tables: Record<string, Row[]> = { trips: [], trip_users: [], families: [], members: [], expenses: [], payments: [] };
+  tables: Record<string, Row[]> = {
+    trips: [],
+    trip_users: [],
+    families: [],
+    members: [],
+    expenses: [],
+    payments: [],
+    activity: [],
+  };
+  /** Mimics a database that has not been given update-2.sql yet. */
+  missingColumns = false;
   offline = false;
   /** Runs once, in the middle of the next download, to simulate someone typing during a sync. */
   duringNextSelect: (() => void) | null = null;
@@ -45,6 +55,9 @@ class FakeServer {
         return { data: rows.slice(query.from, query.to + 1).map((row) => ({ ...row })), error: null };
       }
       case 'upsert': {
+        if (this.missingColumns && action.rows.some((row) => 'upi_id' in row || 'finalized_at' in row)) {
+          return { data: null, error: { message: "Could not find the 'upi_id' column of 'members' in the schema cache" } };
+        }
         for (const row of action.rows) {
           const tripId = table === 'trips' ? row.id : row.trip_id;
           const existing = this.tables[table].find((other) => key(other) === key(row));
@@ -62,6 +75,9 @@ class FakeServer {
         return { data: null, error: null };
       }
       case 'update':
+        if (this.missingColumns && 'finalized_at' in action.patch) {
+          return { data: null, error: { message: "Could not find the 'finalized_at' column of 'trips' in the schema cache" } };
+        }
         this.visible(table, userId)
           .filter(matches)
           .forEach((row) => Object.assign(row, action.patch));
@@ -141,6 +157,10 @@ class Query implements PromiseLike<Result> {
     this.filters.push({ column, values });
     return this;
   }
+  limit(count: number) {
+    this.to = count - 1;
+    return this;
+  }
   range(from: number, to: number) {
     this.from = from;
     this.to = to;
@@ -157,6 +177,7 @@ function fakeClient(server: FakeServer, userId: string) {
     from: (table: string) => new Query(server, userId, table),
     rpc: async (_name: string, args: { code: string }) => server.joinTrip(userId, args.code),
     channel: () => channel,
+    getChannels: () => [],
     removeChannel: async () => {},
     auth: {
       getSession: async () => ({ data: { session: { user: { id: userId, email: `${userId}@example.com` } } } }),
@@ -343,6 +364,69 @@ describe('sync between two phones', () => {
     expect(server.tables.trips).toEqual([]);
     expect(server.tables.expenses).toEqual([]);
     expect(bob.store.getTrips()).toEqual([]);
+  });
+
+  it('carries a finalised trip and a UPI id to the other phone, and reopening too', async () => {
+    await bob.sync.joinTrip(trip(alice)!.inviteCode);
+    const me = trip(alice)!.members[0];
+    const family = trip(alice)!.families[0];
+    alice.store.saveFamily(tripId, {
+      familyId: family.id,
+      name: family.name,
+      members: [{ id: me.id, name: me.name, upiId: 'alice@upi' }],
+      headIndex: 0,
+    });
+    alice.store.finalizeTrip(tripId);
+    await alice.sync.syncNow();
+    await bob.sync.syncNow();
+
+    expect(trip(bob)!.finalizedAt).toBe(trip(alice)!.finalizedAt);
+    expect(trip(bob)!.finalizedAt).toBeDefined();
+    expect(trip(bob)!.members[0].upiId).toBe('alice@upi');
+
+    bob.store.reopenTrip(tripId);
+    await bob.sync.syncNow();
+    await alice.sync.syncNow();
+    expect(trip(alice)!.finalizedAt).toBeUndefined();
+  });
+
+  it('keeps syncing everything else against a database without the latest update', async () => {
+    server.missingColumns = true;
+    const payer = trip(alice)!.meId;
+    alice.store.saveExpense(tripId, dinner('still-syncs', payer));
+    alice.store.saveFamily(tripId, { name: 'Patel', members: [{ name: 'Bob' }], headIndex: 0 });
+    await alice.sync.syncNow();
+    expect(server.tables.expenses.map((expense) => expense.id)).toEqual(['still-syncs']);
+    expect(server.tables.members).toHaveLength(2);
+    expect(alice.sync.hasUnsentChanges()).toBe(false);
+
+    // Finalising needs the new column: it stays on the phone and is reported, but nothing is lost.
+    alice.store.finalizeTrip(tripId);
+    await alice.sync.syncNow();
+    expect(trip(alice)!.finalizedAt).toBeDefined();
+    expect(alice.sync.hasUnsentChanges()).toBe(true);
+
+    server.missingColumns = false;
+    await alice.sync.syncNow();
+    expect(server.tables.trips[0].finalized_at).toBe(trip(alice)!.finalizedAt);
+    expect(alice.sync.hasUnsentChanges()).toBe(false);
+  });
+
+  it('cleans up on the server when a half-uploaded trip is deleted', async () => {
+    server.missingColumns = true;
+    const half = alice.store.createTrip({ name: 'Half', myName: 'Alice', familyName: 'Sharma' });
+    const [family] = alice.store.getTrips().find((candidate) => candidate.id === half)!.families;
+    alice.store.saveFamily(half, { familyId: family.id, name: 'Sharma', members: [{ name: 'Alice', upiId: 'alice@upi' }], headIndex: 0 });
+    await alice.sync.syncNow();
+    // The trip row went up, but its members could not.
+    expect(server.tables.trips.map((row) => row.id)).toContain(half);
+    expect(server.tables.members.filter((row) => row.trip_id === half)).toEqual([]);
+    expect(alice.store.getTrips().find((candidate) => candidate.id === half)!.members).toHaveLength(1);
+
+    alice.store.deleteTrip(half);
+    await alice.sync.syncNow();
+    expect(server.tables.trips.map((row) => row.id)).toEqual([tripId]);
+    expect(alice.store.getTrips().map((candidate) => candidate.id)).toEqual([tripId]);
   });
 
   it('on sign-out removes shared trips from the phone but keeps ones never uploaded', async () => {

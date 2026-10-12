@@ -1,9 +1,32 @@
-import type { StoredTrip } from '@/store/trips';
+import type { ActivityEntry, StoredTrip } from '@/store/trips';
 
 // Shapes of the database tables in supabase/schema.sql.
-export type TripRow = { id: string; name: string; invite_code: string; created_at: string };
+export type TripRow = {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_at: string;
+  finalized_at: string | null;
+};
 export type FamilyRow = { trip_id: string; id: string; name: string; head_id: string; color: string; position: number };
-export type MemberRow = { trip_id: string; id: string; family_id: string; name: string; position: number };
+export type MemberRow = {
+  trip_id: string;
+  id: string;
+  family_id: string;
+  name: string;
+  upi_id: string | null;
+  position: number;
+};
+export type ActivityRow = {
+  id: number;
+  trip_id: string;
+  at: string;
+  actor_member_id: string | null;
+  entity: ActivityEntry['entity'];
+  action: ActivityEntry['action'];
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+};
 export type ExpenseRow = {
   trip_id: string;
   id: string;
@@ -37,7 +60,13 @@ const iso = (value: string) => new Date(value).toISOString();
 
 export function tripToRows(trip: StoredTrip): TripRows {
   return {
-    trip: { id: trip.id, name: trip.name, invite_code: trip.inviteCode, created_at: iso(trip.createdAt) },
+    trip: {
+      id: trip.id,
+      name: trip.name,
+      invite_code: trip.inviteCode,
+      created_at: iso(trip.createdAt),
+      finalized_at: trip.finalizedAt ? iso(trip.finalizedAt) : null,
+    },
     meId: trip.meId || null,
     families: trip.families.map((family, position) => ({
       trip_id: trip.id,
@@ -52,6 +81,7 @@ export function tripToRows(trip: StoredTrip): TripRows {
       id: member.id,
       family_id: member.familyId,
       name: member.name,
+      upi_id: member.upiId || null,
       position,
     })),
     expenses: trip.expenses.map((expense) => ({
@@ -86,6 +116,7 @@ export function rowsToTrip(rows: TripRows, createdBy: string | null): StoredTrip
     createdAt: iso(rows.trip.created_at),
     createdBy: createdBy ?? undefined,
     meId: rows.meId ?? '',
+    ...(rows.trip.finalized_at ? { finalizedAt: iso(rows.trip.finalized_at) } : {}),
     families: [...rows.families].sort(byPosition).map((row) => ({
       id: row.id,
       name: row.name,
@@ -96,6 +127,7 @@ export function rowsToTrip(rows: TripRows, createdBy: string | null): StoredTrip
       id: row.id,
       name: row.name,
       familyId: row.family_id,
+      ...(row.upi_id ? { upiId: row.upi_id } : {}),
     })),
     expenses: rows.expenses
       .map((row) => ({
@@ -125,6 +157,8 @@ export type TripChanges = {
   /** The trip has never been sent to the server. */
   isNew: boolean;
   renamed: boolean;
+  /** The trip was finalised or reopened. */
+  finalizedChanged: boolean;
   meChanged: boolean;
   families: TableChanges<FamilyRow>;
   members: TableChanges<MemberRow>;
@@ -158,6 +192,7 @@ export function diffRows(base: TripRows | undefined, next: TripRows): TripChange
   return {
     isNew: base === undefined,
     renamed: base !== undefined && base.trip.name !== next.trip.name,
+    finalizedChanged: (base?.trip.finalized_at ?? null) !== next.trip.finalized_at,
     meChanged: (base?.meId ?? null) !== next.meId,
     families: diffTable(base?.families ?? [], next.families),
     members: diffTable(base?.members ?? [], next.members),
@@ -171,7 +206,22 @@ export function hasChanges(changes: TripChanges): boolean {
   return (
     changes.isNew ||
     changes.renamed ||
+    changes.finalizedChanged ||
     changes.meChanged ||
     tables.some((table) => table.upserts.length > 0 || table.deletes.length > 0)
   );
+}
+
+export function rowsToActivity(rows: ActivityRow[]): ActivityEntry[] {
+  return rows
+    .map((row) => ({
+      id: Number(row.id),
+      at: iso(row.at),
+      actorMemberId: row.actor_member_id,
+      entity: row.entity,
+      action: row.action,
+      before: row.before,
+      after: row.after,
+    }))
+    .sort((a, b) => b.id - a.id);
 }

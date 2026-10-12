@@ -3,17 +3,19 @@ import { useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { confirmDialog } from '@/components/dialog';
+import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ExpensesTab } from '@/components/trip/expenses-tab';
 import { FamiliesTab } from '@/components/trip/families-tab';
 import { SettleTab } from '@/components/trip/settle-tab';
-import { Button, Card, EmptyState, Fab, Segmented } from '@/components/ui';
+import { Button, Card, EmptyState, Fab, IconButton, Segmented } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
-import { plural, summarizeTrip, type TripSummary } from '@/store/summary';
-import { useTrip, type StoredTrip } from '@/store/trips';
-import { syncNow, useSync } from '@/sync/sync';
+import { formatDay, plural, summarizeTrip, type TripSummary } from '@/store/summary';
+import { canFinalize, reopenTrip, useTrip, type StoredTrip } from '@/store/trips';
+import { usePullToSync, useSync } from '@/sync/sync';
 
 type Tab = 'expenses' | 'families' | 'settle';
 
@@ -21,8 +23,9 @@ function Hero({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
   const theme = useTheme();
   const { myFamily, myFamilyNet, totalSpent } = summary;
   const who = myFamily ? `${myFamily.name} family` : 'Your family';
-  const status =
-    totalSpent === 0
+  const status = summary.incomplete
+    ? 'Still syncing this trip…'
+    : totalSpent === 0
       ? 'Add an expense to get started'
       : myFamilyNet > 0
         ? `${who} gets back ${formatPaise(myFamilyNet)}`
@@ -57,6 +60,7 @@ export default function TripScreen() {
   const insets = useSafeAreaInsets();
   const trip = useTrip(tripId);
   const sync = useSync();
+  const pull = usePullToSync();
   const [tab, setTab] = useState<Tab>('expenses');
 
   if (!trip) {
@@ -69,18 +73,45 @@ export default function TripScreen() {
   const editFamily = (familyId: string) =>
     router.push({ pathname: '/trip/[tripId]/family', params: { tripId, familyId } });
   const chooseMe = () => router.push({ pathname: '/trip/[tripId]/who', params: { tripId } });
+  const openActivity = () => router.push({ pathname: '/trip/[tripId]/activity', params: { tripId } });
+  const finalised = Boolean(trip.finalizedAt);
+  const confirmReopen = () =>
+    confirmDialog({
+      icon: 'lockOpen',
+      title: 'Reopen this trip?',
+      message: 'Expenses can be added and changed again, which may change what everyone owes.',
+      confirmLabel: 'Reopen trip',
+      onConfirm: () => reopenTrip(trip.id),
+    });
 
   return (
     <View style={styles.grow}>
-      <Stack.Screen options={{ title: trip.name }} />
+      <Stack.Screen
+        options={{
+          title: trip.name,
+          headerRight: () => <IconButton icon="history" label="Activity" onPress={openActivity} />,
+        }}
+      />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 104 }]}
-        refreshControl={
-          sync.session ? (
-            <RefreshControl refreshing={sync.status === 'syncing'} onRefresh={() => void syncNow()} />
-          ) : undefined
-        }>
+        refreshControl={sync.session ? <RefreshControl {...pull} /> : undefined}>
         <Hero trip={trip} summary={summary} />
+        {trip.finalizedAt && (
+          <Card>
+            <View style={styles.row}>
+              <Icon name="lock" size={20} />
+              <ThemedText type="bold" style={styles.grow}>
+                Finalised on {formatDay(trip.finalizedAt)}
+              </ThemedText>
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              Expenses are locked. Payments can still be marked as paid under Settle up.
+            </ThemedText>
+            {canFinalize(trip, sync.session?.user.id) && (
+              <Button label="Reopen trip" icon="lockOpen" variant="soft" compact onPress={confirmReopen} style={styles.start} />
+            )}
+          </Card>
+        )}
         {!trip.meId && (
           <Card>
             <ThemedText type="bold">Which one is you?</ThemedText>
@@ -99,11 +130,14 @@ export default function TripScreen() {
             { value: 'settle', label: 'Settle up' },
           ]}
         />
-        {tab === 'expenses' && <ExpensesTab trip={trip} onAddFamily={addFamily} onAddExpense={addExpense} />}
+        {tab === 'expenses' && (
+          <ExpensesTab trip={trip} finalised={finalised} onAddFamily={addFamily} onAddExpense={addExpense} />
+        )}
         {tab === 'families' && (
           <FamiliesTab
             trip={trip}
             summary={summary}
+            finalised={finalised}
             onAddFamily={addFamily}
             onEditFamily={editFamily}
             onChooseMe={chooseMe}
@@ -111,7 +145,9 @@ export default function TripScreen() {
         )}
         {tab === 'settle' && <SettleTab trip={trip} summary={summary} />}
       </ScrollView>
-      {tab !== 'settle' && <Fab label="Add expense" icon="add" bottom={insets.bottom} onPress={addExpense} />}
+      {tab !== 'settle' && !finalised && (
+        <Fab label="Add expense" icon="add" bottom={insets.bottom} onPress={addExpense} />
+      )}
     </View>
   );
 }
@@ -127,6 +163,11 @@ const styles = StyleSheet.create({
   start: {
     alignSelf: 'flex-start',
     marginTop: Spacing.one,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   hero: {
     borderRadius: Radius.large,

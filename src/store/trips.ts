@@ -7,8 +7,23 @@ import { sampleTrip } from '@/data/sample-trip';
 import type { Expense, Family, Member, Payment } from '@/domain';
 
 export type StoredFamily = Family & { color: string };
+export type StoredMember = Member & {
+  /** Where others can send this person money, e.g. name@bank. */
+  upiId?: string;
+};
 export type StoredExpense = Expense & { date: string };
 export type StoredPayment = Payment & { date: string };
+
+/** One line of the server's record of who changed what. Read-only on the phone. */
+export type ActivityEntry = {
+  id: number;
+  at: string;
+  actorMemberId: string | null;
+  entity: 'trip' | 'family' | 'member' | 'expense' | 'payment';
+  action: 'added' | 'changed' | 'removed';
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+};
 
 export type StoredTrip = {
   id: string;
@@ -20,10 +35,14 @@ export type StoredTrip = {
   createdBy?: string;
   /** The member who is using this phone; empty until they have said who they are. */
   meId: string;
+  /** Set once the trip is closed: expenses are locked and only payments remain. */
+  finalizedAt?: string;
   families: StoredFamily[];
-  members: Member[];
+  members: StoredMember[];
   expenses: StoredExpense[];
   payments: StoredPayment[];
+  /** Filled in from the server for shared trips. */
+  activity?: ActivityEntry[];
 };
 
 const TRIPS_KEY = 'famsplit.trips.v1';
@@ -171,6 +190,21 @@ export function setMe(tripId: string, memberId: string) {
   updateTrip(tripId, (trip) => ({ ...trip, meId: memberId }));
 }
 
+export function finalizeTrip(tripId: string) {
+  updateTrip(tripId, (trip) => ({ ...trip, finalizedAt: new Date().toISOString() }));
+}
+
+export function reopenTrip(tripId: string) {
+  updateTrip(tripId, ({ finalizedAt: _finalizedAt, ...trip }) => trip);
+}
+
+/** The trip's creator and the family heads decide when a trip is closed. */
+export function canFinalize(trip: StoredTrip, userId: string | undefined): boolean {
+  const isHead = trip.families.some((family) => family.headId === trip.meId);
+  const isCreator = trip.createdBy === undefined || trip.createdBy === userId;
+  return isHead || isCreator;
+}
+
 /** True when the member appears in any expense or payment, so removing them would break the books. */
 export function isMemberUsed(trip: StoredTrip, memberId: string): boolean {
   const familyId = trip.members.find((member) => member.id === memberId)?.familyId;
@@ -210,17 +244,18 @@ export type FamilyDraft = {
   familyId?: string;
   name: string;
   /** Members without an id are new. */
-  members: { id?: string; name: string }[];
+  members: { id?: string; name: string; upiId?: string }[];
   headIndex: number;
 };
 
 export function saveFamily(tripId: string, draft: FamilyDraft) {
   updateTrip(tripId, (trip) => {
     const familyId = draft.familyId ?? newId('fam');
-    const members: Member[] = draft.members.map((member) => ({
+    const members: StoredMember[] = draft.members.map((member) => ({
       id: member.id ?? newId('mem'),
       name: member.name,
       familyId,
+      ...(member.upiId ? { upiId: member.upiId } : {}),
     }));
     const headId = members[draft.headIndex].id;
     const others = trip.members.filter((member) => member.familyId !== familyId);

@@ -1,6 +1,6 @@
-import type { RealtimeChannel, Session, SupabaseClient } from '@supabase/supabase-js';
+import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import Storage from 'expo-sqlite/kv-store';
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import { applyRemoteTrips, getTrips, setLocalChangeListener, type StoredTrip } from '@/store/trips';
@@ -8,8 +8,10 @@ import { applyRemoteTrips, getTrips, setLocalChangeListener, type StoredTrip } f
 import {
   diffRows,
   hasChanges,
+  rowsToActivity,
   rowsToTrip,
   tripToRows,
+  type ActivityRow,
   type ExpenseRow,
   type FamilyRow,
   type MemberRow,
@@ -98,6 +100,9 @@ async function fetchAll<Row>(client: SupabaseClient, table: string, orderBy: str
   }
 }
 
+/** Why the last upload left something behind, in words the account screen can show. */
+let pushProblem = '';
+
 /** Sends local edits to the server. Returns the trips that could not be sent. */
 async function push(client: SupabaseClient, userId: string): Promise<Set<string>> {
   for (const removal of removals) {
@@ -122,36 +127,58 @@ async function push(client: SupabaseClient, userId: string): Promise<Set<string>
       continue;
     }
 
-    const steps: PromiseLike<{ error: unknown }>[] = [];
+    // First the trip itself and who this user is on it, so the server's activity log can name them.
+    const first: PromiseLike<{ error: { message: string } | null }>[] = [];
     if (changes.isNew) {
       // "Ignore duplicates" makes a half-finished earlier upload safe to repeat.
-      const created = await client.from('trips').upsert(rows.trip, { onConflict: 'id', ignoreDuplicates: true });
-      if (created.error) {
-        if (/network|fetch/i.test(created.error.message)) {
-          throw created.error;
-        }
-        failed.add(trip.id);
-        continue;
-      }
+      const { finalized_at: _finalizedAt, ...created } = rows.trip;
+      first.push(client.from('trips').upsert(created, { onConflict: 'id', ignoreDuplicates: true }));
     } else if (changes.renamed) {
-      steps.push(client.from('trips').update({ name: rows.trip.name }).eq('id', trip.id));
+      first.push(client.from('trips').update({ name: rows.trip.name }).eq('id', trip.id));
     }
-    for (const table of ['families', 'members', 'expenses', 'payments'] as const) {
-      const upserts: object[] = changes[table].upserts;
-      const deletes = changes[table].deletes;
-      if (upserts.length > 0) {
-        steps.push(client.from(table).upsert(upserts, { onConflict: 'trip_id,id' }));
-      }
-      if (deletes.length > 0) {
-        steps.push(client.from(table).delete().eq('trip_id', trip.id).in('id', deletes));
-      }
+    let sent = await Promise.all(first);
+    if (sent.some((result) => result.error && /network|fetch/i.test(result.error.message))) {
+      throw sent.find((result) => result.error)!.error;
     }
-    if (changes.meChanged) {
-      steps.push(client.from('trip_users').update({ member_id: rows.meId }).eq('trip_id', trip.id).eq('user_id', userId));
+    if (changes.isNew && !sent.some((result) => result.error)) {
+      // The trip now exists on the server even if the rest of the upload fails, so remember an empty
+      // version of it: the next sync then sends what is missing, and deleting it here deletes it there.
+      const { finalizedAt: _finalizedAt, ...shell } = trip;
+      bases = { ...bases, [trip.id]: { ...shell, meId: '', families: [], members: [], expenses: [], payments: [] } };
+      persist();
+    }
+    if (!sent.some((result) => result.error) && changes.meChanged) {
+      sent = [await client.from('trip_users').update({ member_id: rows.meId }).eq('trip_id', trip.id).eq('user_id', userId)];
     }
 
-    const results = await Promise.all(steps);
-    if (results.some((result) => result.error)) {
+    if (!sent.some((result) => result.error)) {
+      const steps: PromiseLike<{ error: { message: string } | null }>[] = [];
+      // Databases set up before UPI ids existed have no such column, so only mention it when it is in use.
+      const usesUpi = [...rows.members, ...(base ? tripToRows(base).members : [])].some((member) => member.upi_id);
+      for (const table of ['families', 'members', 'expenses', 'payments'] as const) {
+        const upserts: object[] =
+          table === 'members' && !usesUpi
+            ? changes.members.upserts.map(({ upi_id: _upiId, ...member }) => member)
+            : changes[table].upserts;
+        const deletes = changes[table].deletes;
+        if (upserts.length > 0) {
+          steps.push(client.from(table).upsert(upserts, { onConflict: 'trip_id,id' }));
+        }
+        if (deletes.length > 0) {
+          steps.push(client.from(table).delete().eq('trip_id', trip.id).in('id', deletes));
+        }
+      }
+      if (changes.finalizedChanged) {
+        steps.push(client.from('trips').update({ finalized_at: rows.trip.finalized_at }).eq('id', trip.id));
+      }
+      sent = await Promise.all(steps);
+    }
+
+    const problem = sent.find((result) => result.error)?.error;
+    if (problem) {
+      pushProblem = /column|schema cache/i.test(problem.message)
+        ? 'The database is missing its latest update. Run supabase/update-2.sql in the Supabase SQL editor.'
+        : 'Some changes could not be saved to the server yet.';
       failed.add(trip.id);
       continue;
     }
@@ -178,6 +205,9 @@ async function pull(client: SupabaseClient, userId: string, failed: Set<string>)
     fetchAll<ExpenseRow>(client, 'expenses', ['trip_id', 'id']),
     fetchAll<PaymentRow>(client, 'payments', ['trip_id', 'id']),
   ]);
+  // The newest few hundred log lines are plenty to show; a database without the log simply has none.
+  const log = await client.from('activity').select('*').order('id', { ascending: false }).limit(400);
+  const logRows = (log.data ?? []) as ActivityRow[];
 
   // Anything edited while the download was in flight has to be sent first, or it would be overwritten.
   const edited = before.some(
@@ -189,10 +219,10 @@ async function pull(client: SupabaseClient, userId: string, failed: Set<string>)
 
   const remote = tripRows
     .filter((row) => meByTrip.has(row.id))
-    .map((row) =>
-      rowsToTrip(
+    .map((row) => ({
+      ...rowsToTrip(
         {
-          trip: row,
+          trip: { ...row, finalized_at: row.finalized_at ?? null },
           meId: meByTrip.get(row.id) ?? null,
           families: families.filter((family) => family.trip_id === row.id),
           members: members.filter((member) => member.trip_id === row.id),
@@ -201,7 +231,8 @@ async function pull(client: SupabaseClient, userId: string, failed: Set<string>)
         },
         row.created_by,
       ),
-    );
+      activity: rowsToActivity(logRows.filter((entry) => entry.trip_id === row.id)),
+    }));
   const remoteIds = new Set(remote.map((trip) => trip.id));
 
   // A trip whose edits could not be sent keeps its local version, so nothing typed is lost.
@@ -221,6 +252,15 @@ async function pull(client: SupabaseClient, userId: string, failed: Set<string>)
   return true;
 }
 
+// Hot reloading in development loads this file again while the old copy's timers are still alive.
+// The old copy must stop, or two would sync at once and overwrite each other's work.
+let retired = false;
+(module as unknown as { hot?: { dispose(callback: () => void): void } }).hot?.dispose(() => {
+  retired = true;
+  clearTimeout(debounce);
+  clearTimeout(retry);
+});
+
 let running: Promise<void> | null = null;
 let again = false;
 let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -239,7 +279,7 @@ async function run(client: SupabaseClient, userId: string) {
     } while (again || !settled);
 
     if (failed.size > 0) {
-      setState({ status: 'error', error: 'Some changes could not be saved to the server yet.' });
+      setState({ status: 'error', error: pushProblem });
       retry = setTimeout(() => void syncNow(), RETRY_MS);
     } else {
       setState({ status: 'idle', error: null });
@@ -253,7 +293,7 @@ async function run(client: SupabaseClient, userId: string) {
 /** Pushes local edits and pulls everyone else's. Safe to call at any time; overlapping calls share one run. */
 export function syncNow(): Promise<void> {
   const userId = state.session?.user.id;
-  if (!supabase || !userId) {
+  if (!supabase || !userId || retired) {
     return Promise.resolve();
   }
   if (running) {
@@ -271,8 +311,6 @@ export function requestSync(delayMs = 600) {
   debounce = setTimeout(() => void syncNow(), delayMs);
 }
 
-let channel: RealtimeChannel | null = null;
-
 function setSession(session: Session | null) {
   const previousUser = state.session?.user.id;
   setState({ session });
@@ -280,16 +318,21 @@ function setSession(session: Session | null) {
     return;
   }
 
-  if (channel) {
-    void supabase.removeChannel(channel);
-    channel = null;
+  // Clear out every old subscription, including ones left behind when this file is hot-reloaded in development.
+  for (const stale of supabase.getChannels()) {
+    void supabase.removeChannel(stale);
   }
   if (session) {
-    // Row-level security means this only hears about trips the user is on.
-    channel = supabase
-      .channel('famsplit-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => requestSync(1000))
-      .subscribe();
+    try {
+      // Row-level security means this only hears about trips the user is on. The name is unique
+      // because a channel that is still closing cannot be given new listeners.
+      supabase
+        .channel(`famsplit-changes-${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public' }, () => requestSync(1000))
+        .subscribe();
+    } catch {
+      // Live updates are a bonus; syncing on demand and on app open still works without them.
+    }
     requestSync(0);
   }
 }
@@ -306,7 +349,8 @@ export function startSync() {
 
   setLocalChangeListener(({ removedTrip }) => {
     if (removedTrip && bases[removedTrip.id]) {
-      const mine = removedTrip.createdBy === state.session?.user.id;
+      // A trip with no recorded creator was made on this phone and has not been downloaded back yet.
+      const mine = removedTrip.createdBy === undefined || removedTrip.createdBy === state.session?.user.id;
       removals = [...removals, { tripId: removedTrip.id, mode: mine ? 'delete' : 'leave' }];
       persist();
     }
@@ -383,4 +427,16 @@ export async function joinTrip(code: string): Promise<string> {
   }
   await syncNow();
   return data as string;
+}
+
+/** For pull-to-refresh: the spinner shows only while a sync the user asked for is running. */
+export function usePullToSync(): { refreshing: boolean; onRefresh: () => void } {
+  const [refreshing, setRefreshing] = useState(false);
+  return {
+    refreshing,
+    onRefresh: () => {
+      setRefreshing(true);
+      void syncNow().finally(() => setRefreshing(false));
+    },
+  };
 }

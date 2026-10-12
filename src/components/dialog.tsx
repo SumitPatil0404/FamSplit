@@ -15,7 +15,9 @@ export type DialogOptions = {
   tone?: 'primary' | 'danger';
   confirmLabel: string;
   cancelLabel?: string;
-  onConfirm: () => void;
+  /** For messages that only need acknowledging. */
+  hideCancel?: boolean;
+  onConfirm?: () => void;
 };
 
 let current: DialogOptions | null = null;
@@ -53,7 +55,7 @@ export function DialogHost() {
   const danger = dialog.tone === 'danger';
   const confirm = () => {
     close();
-    dialog.onConfirm();
+    dialog.onConfirm?.();
   };
 
   return (
@@ -76,7 +78,7 @@ export function DialogHost() {
           )}
           <View style={styles.actions}>
             <Button label={dialog.confirmLabel} variant={danger ? 'destructive' : 'primary'} onPress={confirm} />
-            <Button label={dialog.cancelLabel ?? 'Cancel'} variant="soft" onPress={close} />
+            {!dialog.hideCancel && <Button label={dialog.cancelLabel ?? 'Cancel'} variant="soft" onPress={close} />}
           </View>
         </Pressable>
       </Pressable>

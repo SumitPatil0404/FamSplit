@@ -26,6 +26,15 @@ function emojiFor(description: string): string {
   return EMOJI.find(([pattern]) => pattern.test(description))?.[1] ?? '🧾';
 }
 
+/** Empty when the expense refers to people who have not been downloaded yet. */
+function sharesOf(expense: StoredExpense, trip: StoredTrip): Map<string, number> {
+  try {
+    return expenseShares(expense, trip);
+  } catch {
+    return new Map();
+  }
+}
+
 function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpense }) {
   const router = useRouter();
   const theme = useTheme();
@@ -45,7 +54,7 @@ function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpens
       involved = true;
     }
   }
-  expenseShares(expense, trip).forEach((share, memberId) => {
+  sharesOf(expense, trip).forEach((share, memberId) => {
     if (mine.has(memberId) && share > 0) {
       effect -= share;
       involved = true;
@@ -140,7 +149,19 @@ function PaymentRow({ trip, payment }: { trip: StoredTrip; payment: StoredPaymen
   );
 }
 
-export function ExpensesTab({ trip, onAddFamily, onAddExpense }: { trip: StoredTrip; onAddFamily: () => void; onAddExpense: () => void }) {
+type Props = {
+  trip: StoredTrip;
+  /** A finalised trip is read-only, so nothing here invites adding. */
+  finalised: boolean;
+  onAddFamily: () => void;
+  onAddExpense: () => void;
+};
+
+export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Props) {
+  if (finalised && trip.expenses.length === 0 && trip.payments.length === 0) {
+    return <EmptyState emoji="🔒" title="No expenses" body="This trip was finalised without any expenses. Reopen it to add some." />;
+  }
+
   if (trip.families.length < 2) {
     return (
       <EmptyState

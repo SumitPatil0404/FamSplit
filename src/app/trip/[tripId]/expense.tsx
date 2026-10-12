@@ -148,8 +148,9 @@ function ExpenseForm({ trip, existing }: { trip: StoredTrip; existing?: StoredEx
           : { type: 'exact', amounts: exactAmounts };
   const preview = amount > 0 ? previewShares(amount, split, trip) : null;
 
-  const problem =
-    amount <= 0
+  const problem = trip.finalizedAt
+    ? 'This trip is finalised. Reopen it to change expenses.'
+    : amount <= 0
       ? 'Enter how much was paid'
       : several && sum(paidBy) !== amount
         ? 'What each person paid must add up to the total'
@@ -404,7 +405,9 @@ function ExpenseForm({ trip, existing }: { trip: StoredTrip; existing?: StoredEx
           );
         })}
 
-        {existing && <Button label="Delete expense" icon="delete" variant="danger" onPress={confirmDelete} />}
+        {existing && !trip.finalizedAt && (
+          <Button label="Delete expense" icon="delete" variant="danger" onPress={confirmDelete} />
+        )}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderColor: theme.border }]}>

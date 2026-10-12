@@ -11,16 +11,16 @@ import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { plural, summarizeTrip } from '@/store/summary';
 import { createSampleTrip, deleteTrip, useTrips, type StoredTrip } from '@/store/trips';
-import { isShared, syncNow, useSync } from '@/sync/sync';
+import { isShared, usePullToSync, useSync } from '@/sync/sync';
 
 function TripCard({ trip }: { trip: StoredTrip }) {
   const router = useRouter();
   const theme = useTheme();
   const sync = useSync();
-  const { myFamilyNet, totalSpent } = summarizeTrip(trip);
+  const { myFamilyNet, totalSpent, incomplete } = summarizeTrip(trip);
 
   // Someone else's trip can only be left; your own is deleted for everyone.
-  const leaving = isShared(trip.id) && trip.createdBy !== sync.session?.user.id;
+  const leaving = isShared(trip.id) && trip.createdBy !== undefined && trip.createdBy !== sync.session?.user.id;
   const confirmDelete = () =>
     confirmDialog({
       icon: leaving ? 'logout' : 'delete',
@@ -59,7 +59,15 @@ function TripCard({ trip }: { trip: StoredTrip }) {
             amount={myFamilyNet}
             positive="Your family gets back"
             negative="Your family owes"
-            settled={totalSpent === 0 ? 'No expenses yet' : trip.meId ? 'Your family is settled' : 'Tell us who you are'}
+            settled={
+              incomplete
+                ? 'Still syncing…'
+                : totalSpent === 0
+                  ? 'No expenses yet'
+                  : trip.meId
+                    ? 'Your family is settled'
+                    : 'Tell us who you are'
+            }
           />
           <ThemedText type="small" numberOfLines={1} themeColor="textSecondary">
             {formatPaise(totalSpent)} spent
@@ -88,9 +96,8 @@ export default function TripsScreen() {
       }}
     />
   );
-  const refresh = sync.session ? (
-    <RefreshControl refreshing={sync.status === 'syncing'} onRefresh={() => void syncNow()} />
-  ) : undefined;
+  const pull = usePullToSync();
+  const refresh = sync.session ? <RefreshControl {...pull} /> : undefined;
 
   if (trips.length === 0) {
     return (

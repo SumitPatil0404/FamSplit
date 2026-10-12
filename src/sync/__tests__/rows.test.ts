@@ -14,7 +14,7 @@ const trip: StoredTrip = {
     { id: 'f2', name: 'Patel', headId: 'm3', color: '#10B981' },
   ],
   members: [
-    { id: 'm1', name: 'Rajesh', familyId: 'f1' },
+    { id: 'm1', name: 'Rajesh', familyId: 'f1', upiId: 'rajesh@upi' },
     { id: 'm2', name: 'Sunita', familyId: 'f1' },
     { id: 'm3', name: 'Mahesh', familyId: 'f2' },
   ],
@@ -127,6 +127,16 @@ describe('diffRows', () => {
     expect(changes.renamed).toBe(true);
     expect(changes.meChanged).toBe(true);
     expect(changes.families.upserts.map((row) => row.id)).toEqual(['f1']);
+  });
+
+  it('notices finalising, reopening and a changed UPI id', () => {
+    const finalised = { ...trip, finalizedAt: '2026-10-06T12:00:00.000Z' };
+    expect(changesBetween(trip, finalised).finalizedChanged).toBe(true);
+    expect(changesBetween(finalised, trip).finalizedChanged).toBe(true);
+    expect(rowsToTrip(tripToRows(finalised), 'user-a')).toEqual(finalised);
+
+    const changes = changesBetween(trip, { ...trip, members: [{ ...trip.members[0], upiId: undefined }, ...trip.members.slice(1)] });
+    expect(changes.members.upserts).toEqual([expect.objectContaining({ id: 'm1', upi_id: null })]);
   });
 
   it('re-sends later rows when one is removed from the middle of the order', () => {

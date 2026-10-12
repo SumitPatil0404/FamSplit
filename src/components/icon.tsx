@@ -23,6 +23,11 @@ const icons = {
   link: { ios: 'link', android: 'link' },
   lock: { ios: 'lock.fill', android: 'lock' },
   logout: { ios: 'rectangle.portrait.and.arrow.right', android: 'logout' },
+  lockOpen: { ios: 'lock.open.fill', android: 'lock_open' },
+  history: { ios: 'clock.arrow.circlepath', android: 'history' },
+  bell: { ios: 'bell.fill', android: 'notifications' },
+  rupee: { ios: 'indianrupeesign', android: 'currency_rupee' },
+  pdf: { ios: 'doc.richtext', android: 'picture_as_pdf' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;
