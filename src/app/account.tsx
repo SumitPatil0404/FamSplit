@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
@@ -7,6 +8,22 @@ import { Button, Card, EmptyState } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { showToast } from '@/components/toast';
 import { deleteAccount, hasUnsentChanges, signInWithGoogle, signOut, syncNow, useSync } from '@/sync/sync';
+
+const PRIVACY_POLICY_URL = 'https://famsplit-75fca.web.app/privacy';
+
+function PrivacyLink() {
+  return (
+    <Pressable
+      accessibilityRole="link"
+      hitSlop={8}
+      onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
+      style={styles.link}>
+      <ThemedText type="smallBold" themeColor="primary">
+        Privacy policy
+      </ThemedText>
+    </Pressable>
+  );
+}
 
 function SignInPrompt() {
   const [busy, setBusy] = useState(false);
@@ -33,8 +50,10 @@ function SignInPrompt() {
       )}
       <Button label={busy ? 'Waiting for Google…' : 'Continue with Google'} icon="person" onPress={start} disabled={busy} />
       <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
-        Your Google account is only used to sign you in. FamSplit sees your name and email address, nothing else.
+        Your Google account is only used to sign you in. FamSplit sees your name, email address and profile picture,
+        nothing else.
       </ThemedText>
+      <PrivacyLink />
     </ScrollView>
   );
 }
@@ -115,6 +134,7 @@ export default function AccountScreen() {
         </ThemedText>
         <Button label="Delete account" icon="delete" variant="danger" onPress={confirmDelete} />
       </View>
+      <PrivacyLink />
     </ScrollView>
   );
 }
@@ -129,6 +149,10 @@ const styles = StyleSheet.create({
   },
   centered: {
     textAlign: 'center',
+  },
+  link: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.one,
   },
   dangerZone: {
     gap: Spacing.two,
