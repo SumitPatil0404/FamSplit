@@ -11,20 +11,23 @@
   h1 { font-size: 26px; margin: 0 0 8px; }
   p, li { color: #6e6c80; line-height: 1.5; }
   ul { padding-left: 20px; }
-  form { background: #fff; border: 1px solid #e7e6f0; border-radius: 16px; padding: 20px; margin-top: 24px; }
-  label { display: block; font-size: 14px; font-weight: 700; color: #6e6c80; margin: 12px 0 4px; }
-  input { width: 100%; box-sizing: border-box; min-height: 48px; padding: 8px 14px; font-size: 16px; border: 1px solid #e7e6f0; border-radius: 12px; }
-  button { width: 100%; min-height: 52px; margin-top: 20px; border: 0; border-radius: 999px; background: #e5484d; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .card { background: #fff; border: 1px solid #e7e6f0; border-radius: 16px; padding: 20px; margin-top: 24px; }
+  .who { font-weight: 700; color: #15141f; word-break: break-all; }
+  button { width: 100%; min-height: 52px; margin-top: 12px; border: 0; border-radius: 999px; font-size: 16px; font-weight: 700; cursor: pointer; }
   button:disabled { opacity: 0.5; cursor: default; }
+  .primary { background: #6c4df6; color: #fff; }
+  .danger { background: #e5484d; color: #fff; }
+  .soft { background: #eeeafe; color: #6c4df6; }
   #message { margin-top: 16px; font-weight: 600; }
   #message.error { color: #e5484d; }
   #message.done { color: #0b8a5f; }
+  [hidden] { display: none; }
 </style>
 </head>
 <body>
 <main>
   <h1>Delete your FamSplit account</h1>
-  <p>Sign in below to permanently delete your FamSplit account. You can also do this in the app under Account.</p>
+  <p>Sign in with the Google account you use in FamSplit to permanently delete your account. You can also do this in the app under Account.</p>
   <ul>
     <li>Your sign-in is removed for good.</li>
     <li>Trips only you are on are deleted, with their expenses and payments.</li>
@@ -32,52 +35,80 @@
     <li>This cannot be undone.</li>
   </ul>
 
-  <form id="form">
-    <label for="email">Email</label>
-    <input id="email" type="email" autocomplete="email" required />
-    <label for="password">Password</label>
-    <input id="password" type="password" autocomplete="current-password" required />
-    <button id="submit" type="submit">Delete my account</button>
+  <div class="card">
+    <div id="signed-out">
+      <button id="sign-in" class="primary" type="button">Sign in with Google</button>
+    </div>
+    <div id="signed-in" hidden>
+      <p>Signed in as <span id="who" class="who"></span></p>
+      <button id="delete" class="danger" type="button">Delete my account</button>
+      <button id="cancel" class="soft" type="button">Keep my account</button>
+    </div>
     <div id="message" role="status"></div>
-  </form>
+  </div>
 </main>
 <script>
   // These identify the FamSplit project and are the same public values the app itself ships with.
   const PROJECT_URL = 'https://rkbbtjpvqjhmiuytfjtq.supabase.co';
   const PUBLIC_KEY = 'sb_publishable_C15T764IJGvYAscqgb1PJg_wlkXUJS-';
 
-  const form = document.getElementById('form');
-  const button = document.getElementById('submit');
-  const message = document.getElementById('message');
-  const show = (text, kind) => { message.textContent = text; message.className = kind; };
+  const byId = (id) => document.getElementById(id);
+  const show = (text, kind) => { byId('message').textContent = text; byId('message').className = kind || ''; };
+  const signedIn = (yes) => { byId('signed-in').hidden = !yes; byId('signed-out').hidden = yes; };
 
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
+  // Google sends the person back here with their sign-in in the part of the address after "#".
+  // Read it, then take it out of the address bar. It is kept only in this page's memory.
+  const answer = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+  let token = answer.get('access_token');
+  history.replaceState(null, '', location.pathname);
+
+  byId('sign-in').addEventListener('click', () => {
+    const backHere = location.origin + location.pathname;
+    location.href = `${PROJECT_URL}/auth/v1/authorize?provider=google&prompt=select_account&redirect_to=${encodeURIComponent(backHere)}`;
+  });
+
+  byId('cancel').addEventListener('click', () => {
+    token = null;
+    signedIn(false);
+    show('Nothing was deleted.', '');
+  });
+
+  byId('delete').addEventListener('click', async () => {
     if (!confirm('Delete your FamSplit account for good? This cannot be undone.')) return;
-    button.disabled = true;
+    byId('delete').disabled = true;
     show('Working…', '');
     try {
-      const signIn = await fetch(`${PROJECT_URL}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: { apikey: PUBLIC_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email.value.trim(), password: form.password.value }),
-      });
-      if (!signIn.ok) throw new Error('That email and password do not match an account.');
-      const { access_token } = await signIn.json();
-
       const removal = await fetch(`${PROJECT_URL}/functions/v1/delete-account`, {
         method: 'POST',
-        headers: { apikey: PUBLIC_KEY, Authorization: `Bearer ${access_token}` },
+        headers: { apikey: PUBLIC_KEY, Authorization: `Bearer ${token}` },
       });
-      if (!removal.ok) throw new Error('The account could not be deleted. Please try again in a few minutes.');
-
-      form.reset();
+      if (!removal.ok) throw new Error('The account could not be deleted. Please sign in again and retry.');
+      token = null;
+      signedIn(false);
+      byId('sign-in').hidden = true;
       show('Your account has been deleted.', 'done');
     } catch (error) {
       show(error.message || 'Something went wrong. Please try again.', 'error');
-      button.disabled = false;
+      byId('delete').disabled = false;
     }
   });
+
+  (async () => {
+    if (answer.get('error_description')) {
+      show('Google sign-in did not finish: ' + answer.get('error_description'), 'error');
+      return;
+    }
+    if (!token) return;
+    try {
+      const user = await fetch(`${PROJECT_URL}/auth/v1/user`, { headers: { apikey: PUBLIC_KEY, Authorization: `Bearer ${token}` } });
+      if (!user.ok) throw new Error();
+      byId('who').textContent = (await user.json()).email || 'your Google account';
+      signedIn(true);
+    } catch {
+      token = null;
+      show('Sign-in could not be confirmed. Please try again.', 'error');
+    }
+  })();
 </script>
 </body>
 </html>

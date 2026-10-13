@@ -1,5 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import Storage from 'expo-sqlite/kv-store';
+import * as WebBrowser from 'expo-web-browser';
 import { useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
@@ -77,13 +79,10 @@ export function useSync(): SyncState {
 
 /** The server's sign-in errors, reworded for someone who is not a developer. */
 const FRIENDLY: [RegExp, string][] = [
-  [/invalid login credentials/i, 'That email and password do not match.'],
-  [/token has expired|otp.*(expired|invalid)|invalid.*token/i, 'That code is wrong or has expired. Ask for a new one.'],
-  [/rate limit|only request this after|too many/i, 'Too many emails were requested. Wait a few minutes and try again.'],
-  [/already registered|already been registered/i, 'There is already an account with that email. Sign in instead.'],
-  [/password should be|weak password/i, 'Choose a longer password, at least 6 characters.'],
-  [/should be different from the old password/i, 'Choose a password you have not used on this account before.'],
-  [/unable to validate email|invalid email/i, 'That does not look like an email address.'],
+  [/provider is not enabled|unsupported provider/i, 'Google sign-in is not switched on for this app yet.'],
+  [/redirect/i, 'Google sign-in is not fully set up for this app yet.'],
+  [/access[_ ]denied/i, 'Google sign-in was cancelled.'],
+  [/rate limit|too many/i, 'Too many attempts. Wait a few minutes and try again.'],
 ];
 
 function describe(error: unknown): string {
@@ -400,67 +399,57 @@ export function hasUnsentChanges(): boolean {
   );
 }
 
-/** `confirmEmail` means the account exists but its email has not been confirmed with a code yet. */
-export async function signIn(email: string, password: string): Promise<{ error?: string; confirmEmail?: boolean }> {
-  if (!supabase) {
-    return { error: 'Sharing is not set up in this build.' };
-  }
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error && /not confirmed/i.test(error.message)) {
-    return { confirmEmail: true };
-  }
-  return error ? { error: describe(error) } : {};
-}
-
-/** Finishes creating an account with the code that was emailed. Returns an error message, or null when it worked. */
-export async function confirmEmail(email: string, code: string): Promise<string | null> {
+/**
+ * Signs in with a Google account in a browser tab, then comes back to the app.
+ * Returns an error message, or null when it worked or the person simply closed the tab.
+ */
+export async function signInWithGoogle(): Promise<string | null> {
   if (!supabase) {
     return 'Sharing is not set up in this build.';
   }
-  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'signup' });
-  return error ? describe(error) : null;
-}
+  // Ask first whether Google sign-in is switched on, so a half-configured project gives a clear
+  // message here instead of a page of error text in the browser.
+  try {
+    const settings = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+      headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '' },
+    });
+    if (settings.ok && (await settings.json()).external?.google === false) {
+      return 'Google sign-in is not switched on for this app yet.';
+    }
+  } catch {
+    return describe('Network request failed');
+  }
 
-export async function resendConfirmation(email: string): Promise<string | null> {
-  if (!supabase) {
-    return 'Sharing is not set up in this build.';
+  // Where Google sends the person back to: this app, at the "auth-callback" screen.
+  const redirectTo = Linking.createURL('auth-callback');
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
+  });
+  if (error || !data.url) {
+    return describe(error ?? 'Google sign-in could not be started.');
   }
-  const { error } = await supabase.auth.resend({ type: 'signup', email });
-  return error ? describe(error) : null;
-}
 
-/** Emails a code for choosing a new password. Returns an error message, or null when it was sent. */
-export async function requestPasswordReset(email: string): Promise<string | null> {
-  if (!supabase) {
-    return 'Sharing is not set up in this build.';
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success') {
+    return null;
   }
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
-  return error ? describe(error) : null;
-}
 
-/** Checks the emailed code, sets the new password, and leaves the user signed in. */
-export async function resetPassword(email: string, code: string, newPassword: string): Promise<string | null> {
-  if (!supabase) {
-    return 'Sharing is not set up in this build.';
+  // The answer comes back in the link itself: after a "#" on success, after a "?" on failure.
+  const [beforeFragment, fragment = ''] = result.url.split('#');
+  const query = beforeFragment.split('?')[1] ?? '';
+  const answer = new URLSearchParams(fragment || query);
+  const refused = answer.get('error_description') ?? new URLSearchParams(query).get('error_description');
+  if (refused) {
+    return describe(refused);
   }
-  const verified = await supabase.auth.verifyOtp({ email, token: code, type: 'recovery' });
-  if (verified.error) {
-    return describe(verified.error);
+  const accessToken = answer.get('access_token');
+  const refreshToken = answer.get('refresh_token');
+  if (!accessToken || !refreshToken) {
+    return 'Google sign-in did not finish. Please try again.';
   }
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
-  return error ? describe(error) : null;
-}
-
-export async function signUp(email: string, password: string): Promise<{ error?: string; confirmEmail?: boolean }> {
-  if (!supabase) {
-    return { error: 'Sharing is not set up in this build.' };
-  }
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) {
-    return { error: describe(error) };
-  }
-  // No session means the project still requires the email to be confirmed first.
-  return { confirmEmail: data.session === null };
+  const session = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+  return session.error ? describe(session.error) : null;
 }
 
 export async function signOut() {

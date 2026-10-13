@@ -1,220 +1,41 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, EmptyState, Field } from '@/components/ui';
+import { Button, Card, EmptyState } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { showToast } from '@/components/toast';
-import {
-  confirmEmail,
-  deleteAccount,
-  hasUnsentChanges,
-  requestPasswordReset,
-  resendConfirmation,
-  resetPassword,
-  signIn,
-  signOut,
-  signUp,
-  syncNow,
-  useSync,
-} from '@/sync/sync';
+import { deleteAccount, hasUnsentChanges, signInWithGoogle, signOut, syncNow, useSync } from '@/sync/sync';
 
-type Step = 'signIn' | 'confirm' | 'forgot' | 'reset';
-
-const looksLikeEmail = (value: string) => /^\S+@\S+\.\S+$/.test(value.trim());
-const looksLikeCode = (value: string) => /^\d{6,8}$/.test(value.trim());
-
-function SignInForm() {
-  const [step, setStep] = useState<Step>('signIn');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
+function SignInPrompt() {
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ text: string; good?: boolean } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const address = email.trim();
-  const go = (next: Step) => {
-    setStep(next);
-    setCode('');
-    setMessage(null);
-  };
-
-  /** Runs one server request with the buttons disabled, and shows what went wrong if it fails. */
-  const run = async (action: () => Promise<string | null | undefined>, onSuccess?: () => void) => {
+  const start = async () => {
     setBusy(true);
     setMessage(null);
-    const problem = await action();
+    setMessage(await signInWithGoogle());
     setBusy(false);
-    if (problem) {
-      setMessage({ text: problem });
-    } else {
-      onSuccess?.();
-    }
   };
 
-  const submitSignIn = () =>
-    run(async () => {
-      const result = await signIn(address, password);
-      if (result.confirmEmail) {
-        go('confirm');
-        return (await resendConfirmation(address)) ?? undefined;
-      }
-      return result.error;
-    });
-
-  const submitSignUp = () =>
-    run(async () => {
-      const result = await signUp(address, password);
-      if (result.confirmEmail) {
-        go('confirm');
-      }
-      return result.error;
-    });
-
-  const sent = () => setMessage({ text: `A new code is on its way to ${address}.`, good: true });
-
-  const emailField = (
-    <Field
-      label="Email"
-      placeholder="you@example.com"
-      value={email}
-      onChangeText={setEmail}
-      autoCapitalize="none"
-      autoCorrect={false}
-      keyboardType="email-address"
-    />
-  );
-  const codeField = (
-    <Field
-      label="Code from the email"
-      placeholder="123456"
-      value={code}
-      onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, 8))}
-      keyboardType="number-pad"
-      autoFocus
-    />
-  );
-  const passwordField = (label: string) => (
-    <Field
-      label={label}
-      placeholder="At least 6 characters"
-      value={password}
-      onChangeText={setPassword}
-      autoCapitalize="none"
-      secureTextEntry
-    />
-  );
-  const link = (label: string, onPress: () => void) => (
-    <Pressable accessibilityRole="button" hitSlop={8} disabled={busy} onPress={onPress} style={styles.link}>
-      <ThemedText type="smallBold" themeColor="primary">
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-
   return (
-    <KeyboardAvoidingView behavior="padding" style={styles.grow}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {step === 'signIn' && (
-          <>
-            <ThemedText type="heading">Share trips with the other families</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              With an account, other families can join your trips with a code, everyone sees expenses as they are
-              added, and your trips are backed up.
-            </ThemedText>
-            {emailField}
-            {passwordField('Password')}
-          </>
-        )}
-        {step === 'confirm' && (
-          <>
-            <ThemedText type="heading">Check your email</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              We sent a code to {address}. Enter it here to finish creating your account.
-            </ThemedText>
-            {codeField}
-          </>
-        )}
-        {step === 'forgot' && (
-          <>
-            <ThemedText type="heading">Forgot your password?</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Enter the email you signed up with and we will send you a code to choose a new password.
-            </ThemedText>
-            {emailField}
-          </>
-        )}
-        {step === 'reset' && (
-          <>
-            <ThemedText type="heading">Choose a new password</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Enter the code we sent to {address}, then your new password.
-            </ThemedText>
-            {codeField}
-            {passwordField('New password')}
-          </>
-        )}
-
-        {message && (
-          <ThemedText type="small" themeColor={message.good ? 'positive' : 'negative'}>
-            {message.text}
-          </ThemedText>
-        )}
-
-        {step === 'signIn' && (
-          <>
-            <Button
-              label={busy ? 'Please wait…' : 'Sign in'}
-              onPress={submitSignIn}
-              disabled={busy || !looksLikeEmail(email) || password.length < 6}
-            />
-            <Button
-              label="Create an account"
-              variant="soft"
-              onPress={submitSignUp}
-              disabled={busy || !looksLikeEmail(email) || password.length < 6}
-            />
-            {link('Forgot password?', () => {
-              setPassword('');
-              go('forgot');
-            })}
-          </>
-        )}
-        {step === 'confirm' && (
-          <>
-            <Button
-              label={busy ? 'Please wait…' : 'Confirm email'}
-              onPress={() => run(() => confirmEmail(address, code.trim()))}
-              disabled={busy || !looksLikeCode(code)}
-            />
-            {link('Send the code again', () => run(() => resendConfirmation(address), sent))}
-            {link('Use a different email', () => go('signIn'))}
-          </>
-        )}
-        {step === 'forgot' && (
-          <>
-            <Button
-              label={busy ? 'Please wait…' : 'Email me a code'}
-              onPress={() => run(() => requestPasswordReset(address), () => go('reset'))}
-              disabled={busy || !looksLikeEmail(email)}
-            />
-            {link('Back to sign in', () => go('signIn'))}
-          </>
-        )}
-        {step === 'reset' && (
-          <>
-            <Button
-              label={busy ? 'Please wait…' : 'Save new password'}
-              onPress={() => run(() => resetPassword(address, code.trim(), password))}
-              disabled={busy || !looksLikeCode(code) || password.length < 6}
-            />
-            {link('Send the code again', () => run(() => requestPasswordReset(address), sent))}
-            {link('Back to sign in', () => go('signIn'))}
-          </>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    <ScrollView contentContainerStyle={styles.content}>
+      <ThemedText type="heading">Share trips with the other families</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        With an account, other families can join your trips with a code, everyone sees expenses as they are added, and
+        your trips are backed up.
+      </ThemedText>
+      {message && (
+        <ThemedText type="small" themeColor="negative">
+          {message}
+        </ThemedText>
+      )}
+      <Button label={busy ? 'Waiting for Google…' : 'Continue with Google'} icon="person" onPress={start} disabled={busy} />
+      <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+        Your Google account is only used to sign you in. FamSplit sees your name and email address, nothing else.
+      </ThemedText>
+    </ScrollView>
   );
 }
 
@@ -232,7 +53,7 @@ export default function AccountScreen() {
   }
 
   if (!sync.session) {
-    return <SignInForm />;
+    return <SignInPrompt />;
   }
 
   const confirmSignOut = () =>
@@ -299,9 +120,6 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  grow: {
-    flex: 1,
-  },
   content: {
     padding: Spacing.three,
     gap: Spacing.three,
@@ -309,9 +127,8 @@ const styles = StyleSheet.create({
   spacer: {
     height: Spacing.one,
   },
-  link: {
-    alignSelf: 'center',
-    paddingVertical: Spacing.one,
+  centered: {
+    textAlign: 'center',
   },
   dangerZone: {
     gap: Spacing.two,

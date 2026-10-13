@@ -50,3 +50,6 @@ example
 
 # Supabase CLI working files
 supabase/.temp/
+
+# Firebase tool working files
+.firebase/

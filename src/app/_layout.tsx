@@ -40,6 +40,7 @@ export default function RootLayout() {
         <Stack.Screen name="new-trip" options={{ title: 'New trip', presentation: 'modal' }} />
         <Stack.Screen name="account" options={{ title: 'Account', presentation: 'modal' }} />
         <Stack.Screen name="join" options={{ title: 'Join a trip', presentation: 'modal' }} />
+        <Stack.Screen name="auth-callback" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
         <Stack.Screen name="trip/[tripId]/expense" options={{ title: 'Add expense', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/family" options={{ title: 'Add family', presentation: 'modal' }} />
