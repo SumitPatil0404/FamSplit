@@ -51,7 +51,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "build:release": "./scripts/build-release.sh"
   },
   "private": true,
   "jest": {
