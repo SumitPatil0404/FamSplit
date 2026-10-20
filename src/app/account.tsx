@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -11,17 +12,25 @@ import { deleteAccount, hasUnsentChanges, signInWithGoogle, signOut, syncNow, us
 
 const PRIVACY_POLICY_URL = 'https://famsplit-75fca.web.app/privacy';
 
-function PrivacyLink() {
+function HelpLinks() {
+  const router = useRouter();
   return (
-    <Pressable
-      accessibilityRole="link"
-      hitSlop={8}
-      onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
-      style={styles.link}>
-      <ThemedText type="smallBold" themeColor="primary">
-        Privacy policy
-      </ThemedText>
-    </Pressable>
+    <View style={styles.links}>
+      <Pressable accessibilityRole="link" hitSlop={8} onPress={() => router.push('/welcome')} style={styles.link}>
+        <ThemedText type="smallBold" themeColor="primary">
+          How FamSplit works
+        </ThemedText>
+      </Pressable>
+      <Pressable
+        accessibilityRole="link"
+        hitSlop={8}
+        onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
+        style={styles.link}>
+        <ThemedText type="smallBold" themeColor="primary">
+          Privacy policy
+        </ThemedText>
+      </Pressable>
+    </View>
   );
 }
 
@@ -53,7 +62,7 @@ function SignInPrompt() {
         Your Google account is only used to sign you in. FamSplit sees your name, email address and profile picture,
         nothing else.
       </ThemedText>
-      <PrivacyLink />
+      <HelpLinks />
     </ScrollView>
   );
 }
@@ -134,7 +143,7 @@ export default function AccountScreen() {
         </ThemedText>
         <Button label="Delete account" icon="delete" variant="danger" onPress={confirmDelete} />
       </View>
-      <PrivacyLink />
+      <HelpLinks />
     </ScrollView>
   );
 }
@@ -150,8 +159,13 @@ const styles = StyleSheet.create({
   centered: {
     textAlign: 'center',
   },
+  links: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing.four,
+  },
   link: {
-    alignSelf: 'center',
     paddingVertical: Spacing.one,
   },
   dangerZone: {

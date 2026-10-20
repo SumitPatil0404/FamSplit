@@ -3,28 +3,14 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
 import { ThemedText } from '@/components/themed-text';
+import { CategoryTile } from '@/components/trip/expense-parts';
 import { Button, Card, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { expenseShares, formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { categoryOf } from '@/store/categories';
 import { formatDay } from '@/store/summary';
 import { deletePayment, type StoredExpense, type StoredPayment, type StoredTrip } from '@/store/trips';
-
-const EMOJI: [RegExp, string][] = [
-  [/cab|taxi|auto|uber|ola|fuel|petrol|diesel|toll|bus|train|parking/i, '🚕'],
-  [/flight|plane|airfare|airline/i, '✈️'],
-  [/hotel|villa|stay|room|resort|rent|airbnb|homestay/i, '🏠'],
-  [/grocer|vegetable|milk|supermarket|kirana/i, '🛒'],
-  [/dinner|lunch|breakfast|food|restaurant|meal|snack|pizza|biryani/i, '🍽️'],
-  [/tea|chai|coffee|drink|juice|bar|beer/i, '☕'],
-  [/ticket|boat|ride|entry|park|movie|show|tour|safari/i, '🎟️'],
-  [/shop|gift|souvenir|cloth/i, '🛍️'],
-  [/medic|doctor|pharma/i, '💊'],
-];
-
-function emojiFor(description: string): string {
-  return EMOJI.find(([pattern]) => pattern.test(description))?.[1] ?? '🧾';
-}
 
 /** Empty when the expense refers to people who have not been downloaded yet. */
 function sharesOf(expense: StoredExpense, trip: StoredTrip): Map<string, number> {
@@ -37,7 +23,6 @@ function sharesOf(expense: StoredExpense, trip: StoredTrip): Map<string, number>
 
 function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpense }) {
   const router = useRouter();
-  const theme = useTheme();
 
   const nameOf = (memberId: string) => trip.members.find((member) => member.id === memberId)?.name ?? 'Someone';
   const payers = Object.keys(expense.paidBy).filter((memberId) => expense.paidBy[memberId] > 0);
@@ -64,14 +49,10 @@ function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpens
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={() => router.push({ pathname: '/trip/[tripId]/expense', params: { tripId: trip.id, expenseId: expense.id } })}
+      onPress={() => router.push({ pathname: '/trip/[tripId]/expense-details', params: { tripId: trip.id, expenseId: expense.id } })}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
       <Card style={styles.row}>
-        <View style={[styles.tile, { backgroundColor: theme.backgroundSelected }]}>
-          <ThemedText allowFontScaling={false} style={styles.emoji}>
-            {emojiFor(expense.description)}
-          </ThemedText>
-        </View>
+        <CategoryTile emoji={categoryOf(expense).emoji} />
         <View style={styles.grow}>
           <ThemedText type="bold">{expense.description}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">

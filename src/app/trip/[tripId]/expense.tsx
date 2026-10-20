@@ -3,174 +3,57 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { confirmDialog } from '@/components/dialog';
+import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
-import { Avatar, Button, Card, Checkbox, EmptyState, Field, IconButton, Segmented } from '@/components/ui';
+import { CategoryTile } from '@/components/trip/expense-parts';
+import { Avatar, Button, Card, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
-import { expenseShares, formatPaise, toPaise, type Paise, type Split } from '@/domain';
+import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
-import { deleteExpense, newId, saveExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
+import {
+  cleanAmount,
+  payerLabel,
+  readDraft,
+  splitLabel,
+  startDraft,
+  updateDraft,
+  useDraft,
+  type ExpenseDraft,
+} from '@/store/expense-draft';
+import { newId, saveExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
 
-type Mode = 'equal' | 'perFamily' | 'shares' | 'exact';
-
-const SEVERAL = 'several';
-
-/** Keeps only digits and a single decimal point with up to two decimals. */
-function cleanAmount(text: string): string {
-  const [whole, ...rest] = text.replace(/[^0-9.]/g, '').split('.');
-  return rest.length > 0 ? `${whole}.${rest.join('').slice(0, 2)}` : whole;
-}
-
-function parseAmount(text: string | undefined): Paise {
-  const trimmed = (text ?? '').replace(/\.$/, '');
-  if (trimmed === '') {
-    return 0;
-  }
-  try {
-    return toPaise(trimmed.startsWith('.') ? `0${trimmed}` : trimmed);
-  } catch {
-    return 0;
-  }
-}
-
-/** Turns typed amounts into paise, leaving out anyone with nothing entered. */
-function parseAmounts(texts: Record<string, string>): Record<string, Paise> {
-  return Object.fromEntries(
-    Object.entries(texts)
-      .map(([memberId, text]) => [memberId, parseAmount(text)] as const)
-      .filter(([, value]) => value > 0),
-  );
-}
-
-function toTexts(amounts: Record<string, Paise>): Record<string, string> {
-  return Object.fromEntries(Object.entries(amounts).map(([memberId, value]) => [memberId, String(value / 100)]));
-}
-
-function sum(amounts: Record<string, Paise>): Paise {
-  return Object.values(amounts).reduce((total, value) => total + value, 0);
-}
-
-function previewShares(amount: Paise, split: Split, trip: StoredTrip): Map<string, Paise> | null {
-  try {
-    return expenseShares({ id: 'draft', description: 'draft', amount, paidBy: {}, split }, trip);
-  } catch {
-    return null;
-  }
-}
-
-function MoneyInput({ value, onChange, label }: { value: string; onChange: (text: string) => void; label: string }) {
+/** A tappable word in the "Paid by … and split …" sentence. */
+function Choice({ label, onPress, accessibilityLabel }: { label: string; onPress: () => void; accessibilityLabel: string }) {
   const theme = useTheme();
   return (
-    <View style={[styles.money, { backgroundColor: theme.background, borderColor: theme.border }]}>
-      <ThemedText type="smallBold" themeColor="textSecondary">
-        ₹
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [styles.choice, { backgroundColor: theme.primarySoft, opacity: pressed ? 0.7 : 1 }]}>
+      <ThemedText type="bold" numberOfLines={1} themeColor="primary">
+        {label}
       </ThemedText>
-      <TextInput
-        accessibilityLabel={label}
-        value={value}
-        onChangeText={(text) => onChange(cleanAmount(text))}
-        placeholder="0"
-        placeholderTextColor={theme.textSecondary}
-        keyboardType="decimal-pad"
-        style={[styles.moneyInput, { color: theme.text }]}
-      />
-    </View>
+      <Icon name="expandMore" size={18} color={theme.primary} />
+    </Pressable>
   );
 }
 
-/** "₹1,750 of ₹2,750 · ₹1,000 left", the running total Splitwise shows while amounts are typed in. */
-function Tally({ entered, total }: { entered: Paise; total: Paise }) {
-  const left = total - entered;
-  return (
-    <ThemedText type="smallBold" themeColor={left === 0 && total > 0 ? 'positive' : left < 0 ? 'negative' : 'textSecondary'}>
-      {formatPaise(entered)} of {formatPaise(total)} ·{' '}
-      {left === 0 ? 'all accounted for' : left > 0 ? `${formatPaise(left)} left` : `${formatPaise(-left)} too much`}
-    </ThemedText>
-  );
-}
-
-function ExpenseForm({ trip, existing }: { trip: StoredTrip; existing?: StoredExpense }) {
+function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: StoredExpense; draft: ExpenseDraft }) {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { amount, category, paidBy, split, preview, problem } = readDraft(draft, trip);
 
-  const existingPayers = existing ? Object.keys(existing.paidBy).filter((id) => existing.paidBy[id] > 0) : [];
-  const oldSplit = existing?.split;
-
-  const [amountText, setAmountText] = useState(existing ? String(existing.amount / 100) : '');
-  const [description, setDescription] = useState(existing?.description ?? '');
-  const [payerId, setPayerId] = useState(
-    existing ? (existingPayers.length > 1 ? SEVERAL : existingPayers[0]) : trip.meId || trip.members[0]?.id,
-  );
-  const [paidTexts, setPaidTexts] = useState<Record<string, string>>(() =>
-    existing && existingPayers.length > 1 ? toTexts(existing.paidBy) : {},
-  );
-  const [mode, setMode] = useState<Mode>(oldSplit?.type ?? 'equal');
-  const [memberOn, setMemberOn] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      trip.members.map((member) => [member.id, oldSplit?.type === 'equal' ? oldSplit.memberIds.includes(member.id) : true]),
-    ),
-  );
-  const [familyOn, setFamilyOn] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      trip.families.map((family) => [
-        family.id,
-        oldSplit?.type === 'perFamily' ? oldSplit.familyIds.includes(family.id) : true,
-      ]),
-    ),
-  );
-  const [shares, setShares] = useState<Record<string, number>>(() =>
-    Object.fromEntries(
-      trip.members.map((member) => [member.id, oldSplit?.type === 'shares' ? (oldSplit.shares[member.id] ?? 0) : 1]),
-    ),
-  );
-  const [exactTexts, setExactTexts] = useState<Record<string, string>>(() =>
-    oldSplit?.type === 'exact' ? toTexts(oldSplit.amounts) : {},
-  );
-
-  const amount = parseAmount(amountText);
-  const several = payerId === SEVERAL;
-  const paidBy = several ? parseAmounts(paidTexts) : { [payerId]: amount };
-  const exactAmounts = parseAmounts(exactTexts);
-
-  const split: Split =
-    mode === 'equal'
-      ? { type: 'equal', memberIds: trip.members.filter((member) => memberOn[member.id]).map((member) => member.id) }
-      : mode === 'perFamily'
-        ? { type: 'perFamily', familyIds: trip.families.filter((family) => familyOn[family.id]).map((family) => family.id) }
-        : mode === 'shares'
-          ? {
-              type: 'shares',
-              shares: Object.fromEntries(
-                trip.members.filter((member) => shares[member.id] > 0).map((member) => [member.id, shares[member.id]]),
-              ),
-            }
-          : { type: 'exact', amounts: exactAmounts };
-  const preview = amount > 0 ? previewShares(amount, split, trip) : null;
-
-  const problem = trip.finalizedAt
-    ? 'This trip is finalised. Reopen it to change expenses.'
-    : amount <= 0
-      ? 'Enter how much was paid'
-      : several && sum(paidBy) !== amount
-        ? 'What each person paid must add up to the total'
-        : mode === 'exact' && sum(exactAmounts) !== amount
-          ? 'What each person owes must add up to the total'
-          : preview === null
-            ? 'Choose who to split it between'
-            : null;
-
-  const shareOf = (memberId: string) => {
-    const share = preview?.get(memberId);
-    return share ? formatPaise(share) : '—';
-  };
-  const membersOf = (familyId: string) => trip.members.filter((member) => member.familyId === familyId);
+  const open = (pathname: '/trip/[tripId]/expense-category' | '/trip/[tripId]/expense-payer' | '/trip/[tripId]/expense-split') =>
+    router.push({ pathname, params: { tripId: trip.id } });
 
   const save = () => {
     saveExpense(trip.id, {
       id: existing?.id ?? newId('exp'),
       date: existing?.date ?? new Date().toISOString(),
-      description: description.trim() || 'Expense',
+      description: draft.description.trim() || category.label,
+      category: category.id,
       amount,
       paidBy,
       split,
@@ -178,235 +61,92 @@ function ExpenseForm({ trip, existing }: { trip: StoredTrip; existing?: StoredEx
     router.back();
   };
 
-  const confirmDelete = () => {
-    if (!existing) {
-      return;
-    }
-    confirmDialog({
-      icon: 'delete',
-      tone: 'danger',
-      title: 'Delete this expense?',
-      message: 'Everyone’s balances will be recalculated.',
-      confirmLabel: 'Delete expense',
-      onConfirm: () => {
-        deleteExpense(trip.id, existing.id);
-        router.back();
-      },
-    });
-  };
-
-  const chipColors = (selected: boolean) => ({
-    backgroundColor: selected ? theme.primary : theme.backgroundElement,
-    borderColor: theme.border,
-  });
+  // What each family ends up paying, so the choices can be checked at a glance.
+  const familyShares = trip.families
+    .map((family) => ({
+      family,
+      share: trip.members
+        .filter((member) => member.familyId === family.id)
+        .reduce((total, member) => total + (preview?.get(member.id) ?? 0), 0),
+    }))
+    .filter(({ share }) => share > 0);
+  const underline = { borderBottomColor: theme.border, color: theme.text };
 
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
       <Stack.Screen options={{ title: existing ? 'Edit expense' : 'Add expense' }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.amountRow}>
-          <ThemedText type="amount" themeColor="textSecondary">
-            ₹
-          </ThemedText>
-          <TextInput
-            accessibilityLabel="Total amount"
-            value={amountText}
-            onChangeText={(text) => setAmountText(cleanAmount(text))}
-            placeholder="0"
-            placeholderTextColor={theme.textSecondary}
-            keyboardType="decimal-pad"
-            autoFocus={!existing}
-            style={[styles.amountInput, { color: theme.text }]}
-          />
-        </View>
-
-        <Field label="What was it for?" placeholder="Dinner, cab, hotel…" value={description} onChangeText={setDescription} />
-
-        <View style={styles.section}>
-          <View style={[styles.row, styles.spread]}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Paid by
-            </ThemedText>
+        <View style={styles.inputs}>
+          <View style={styles.inputRow}>
             <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: several }}
-              hitSlop={8}
-              onPress={() => setPayerId(several ? trip.meId || trip.members[0]?.id : SEVERAL)}>
-              <ThemedText type="smallBold" numberOfLines={1} themeColor="primary">
-                {several ? 'One person paid' : 'Several people paid'}
-              </ThemedText>
+              accessibilityRole="button"
+              accessibilityLabel={`Category: ${category.label}. Change category`}
+              onPress={() => open('/trip/[tripId]/expense-category')}>
+              <CategoryTile emoji={category.emoji} size={56} />
+              <View style={[styles.editBadge, { backgroundColor: theme.primary, borderColor: theme.background }]}>
+                <Icon name="edit" size={12} color={theme.onPrimary} />
+              </View>
             </Pressable>
+            <TextInput
+              accessibilityLabel="What was it for?"
+              value={draft.description}
+              onChangeText={(description) => updateDraft({ description })}
+              placeholder="What was it for?"
+              placeholderTextColor={theme.textSecondary}
+              autoFocus={!existing}
+              returnKeyType="next"
+              style={[styles.description, underline]}
+            />
           </View>
 
-          {!several && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
-              {trip.families.flatMap((family) =>
-                membersOf(family.id).map((member) => {
-                  const selected = member.id === payerId;
-                  return (
-                    <Pressable
-                      key={member.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      onPress={() => setPayerId(member.id)}
-                      style={[styles.chip, chipColors(selected)]}>
-                      <Avatar name={member.name} color={selected ? '#FFFFFF' : family.color} size={24} />
-                      <ThemedText type="smallBold" numberOfLines={1} style={{ color: selected ? theme.onPrimary : theme.text }}>
-                        {member.id === trip.meId ? 'You' : member.name}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                }),
-              )}
-            </ScrollView>
-          )}
-
-          {several && (
-            <Card>
-              <ThemedText type="small" themeColor="textSecondary">
-                Enter what each person paid.
+          <View style={styles.inputRow}>
+            <View style={[styles.rupee, { backgroundColor: theme.primarySoft }]}>
+              <ThemedText allowFontScaling={false} style={[styles.rupeeText, { color: theme.primary }]}>
+                ₹
               </ThemedText>
-              {trip.families.flatMap((family) =>
-                membersOf(family.id).map((member) => (
-                  <View key={member.id} style={[styles.row, styles.memberRow]}>
-                    <Avatar name={member.name} color={family.color} size={28} />
-                    <ThemedText style={styles.grow}>{member.id === trip.meId ? 'You' : member.name}</ThemedText>
-                    <MoneyInput
-                      label={`Paid by ${member.name}`}
-                      value={paidTexts[member.id] ?? ''}
-                      onChange={(text) => setPaidTexts({ ...paidTexts, [member.id]: text })}
-                    />
-                  </View>
-                )),
-              )}
-              <Tally entered={sum(paidBy)} total={amount} />
-            </Card>
-          )}
+            </View>
+            <TextInput
+              accessibilityLabel="Total amount"
+              value={draft.amountText}
+              onChangeText={(text) => updateDraft({ amountText: cleanAmount(text) })}
+              placeholder="0.00"
+              placeholderTextColor={theme.textSecondary}
+              keyboardType="decimal-pad"
+              style={[styles.amount, underline]}
+            />
+          </View>
         </View>
 
-        <View style={styles.section}>
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            Split
-          </ThemedText>
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'equal', label: 'Per person' },
-              { value: 'perFamily', label: 'Per family' },
-              { value: 'shares', label: 'Shares' },
-              { value: 'exact', label: 'Exact' },
-            ]}
+        <View style={styles.sentence}>
+          <ThemedText type="bold">Paid by</ThemedText>
+          <Choice
+            label={payerLabel(draft, trip, paidBy)}
+            accessibilityLabel="Change who paid"
+            onPress={() => open('/trip/[tripId]/expense-payer')}
           />
-          <ThemedText type="small" themeColor="textSecondary">
-            {mode === 'equal'
-              ? 'Everyone ticked pays the same amount.'
-              : mode === 'perFamily'
-                ? 'Each family pays the same, whatever its size.'
-                : mode === 'shares'
-                  ? 'Give children or light eaters a smaller share, like 0.5.'
-                  : 'Enter exactly what each person owes.'}
-          </ThemedText>
-          {mode === 'exact' && <Tally entered={sum(exactAmounts)} total={amount} />}
+          <ThemedText type="bold">and split</ThemedText>
+          <Choice
+            label={splitLabel(draft, trip)}
+            accessibilityLabel="Change how it is split"
+            onPress={() => open('/trip/[tripId]/expense-split')}
+          />
         </View>
 
-        {trip.families.map((family) => {
-          const members = membersOf(family.id);
-          const allOn = members.every((member) => memberOn[member.id]);
-          const familyShare = members.reduce((total, member) => total + (preview?.get(member.id) ?? 0), 0);
-
-          if (mode === 'perFamily') {
-            return (
-              <Pressable key={family.id} onPress={() => setFamilyOn({ ...familyOn, [family.id]: !familyOn[family.id] })}>
-                <Card style={styles.row}>
-                  <Checkbox checked={familyOn[family.id]} />
-                  <Avatar name={family.name} color={family.color} size={32} />
-                  <View style={styles.grow}>
-                    <ThemedText type="bold">{family.name} family</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {members.length === 1 ? '1 person' : `${members.length} people`}
-                    </ThemedText>
-                  </View>
-                  <ThemedText type="smallBold" numberOfLines={1}>
-                    {familyShare > 0 ? formatPaise(familyShare) : '—'}
-                  </ThemedText>
-                </Card>
-              </Pressable>
-            );
-          }
-
-          return (
-            <Card key={family.id}>
-              <Pressable
-                disabled={mode !== 'equal'}
-                onPress={() =>
-                  setMemberOn({ ...memberOn, ...Object.fromEntries(members.map((member) => [member.id, !allOn])) })
-                }
-                style={styles.row}>
-                <Avatar name={family.name} color={family.color} size={32} />
-                <ThemedText type="bold" style={styles.grow}>
+        {preview && familyShares.length > 0 && (
+          <Card style={styles.shares}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              EACH FAMILY’S SHARE
+            </ThemedText>
+            {familyShares.map(({ family, share }) => (
+              <View key={family.id} style={styles.shareRow}>
+                <Avatar name={family.name} color={family.color} size={28} />
+                <ThemedText style={styles.grow} numberOfLines={1}>
                   {family.name} family
                 </ThemedText>
-                {mode === 'equal' && (
-                  <ThemedText type="smallBold" numberOfLines={1} themeColor="primary">
-                    {allOn ? 'Clear' : 'Select all'}
-                  </ThemedText>
-                )}
-              </Pressable>
-
-              {members.map((member) =>
-                mode === 'equal' ? (
-                  <Pressable
-                    key={member.id}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: memberOn[member.id] }}
-                    onPress={() => setMemberOn({ ...memberOn, [member.id]: !memberOn[member.id] })}
-                    style={[styles.row, styles.memberRow]}>
-                    <Checkbox checked={memberOn[member.id]} />
-                    <ThemedText style={styles.grow}>{member.name}</ThemedText>
-                    <ThemedText type="smallBold" numberOfLines={1} themeColor="textSecondary">
-                      {shareOf(member.id)}
-                    </ThemedText>
-                  </Pressable>
-                ) : mode === 'shares' ? (
-                  <View key={member.id} style={[styles.row, styles.memberRow]}>
-                    <View style={styles.grow}>
-                      <ThemedText>{member.name}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {shareOf(member.id)}
-                      </ThemedText>
-                    </View>
-                    <IconButton
-                      icon="remove"
-                      label={`Smaller share for ${member.name}`}
-                      onPress={() => setShares({ ...shares, [member.id]: Math.max(0, shares[member.id] - 0.5) })}
-                    />
-                    <ThemedText type="bold" style={styles.shareValue}>
-                      {shares[member.id]}
-                    </ThemedText>
-                    <IconButton
-                      icon="add"
-                      label={`Bigger share for ${member.name}`}
-                      onPress={() => setShares({ ...shares, [member.id]: Math.min(5, shares[member.id] + 0.5) })}
-                    />
-                  </View>
-                ) : (
-                  <View key={member.id} style={[styles.row, styles.memberRow]}>
-                    <ThemedText style={styles.grow}>{member.name}</ThemedText>
-                    <MoneyInput
-                      label={`Owed by ${member.name}`}
-                      value={exactTexts[member.id] ?? ''}
-                      onChange={(text) => setExactTexts({ ...exactTexts, [member.id]: text })}
-                    />
-                  </View>
-                ),
-              )}
-            </Card>
-          );
-        })}
-
-        {existing && !trip.finalizedAt && (
-          <Button label="Delete expense" icon="delete" variant="danger" onPress={confirmDelete} />
+                <ThemedText type="smallBold">{formatPaise(share)}</ThemedText>
+              </View>
+            ))}
+          </Card>
         )}
       </ScrollView>
 
@@ -422,6 +162,16 @@ function ExpenseForm({ trip, existing }: { trip: StoredTrip; existing?: StoredEx
   );
 }
 
+function ExpenseEditor({ trip, existing }: { trip: StoredTrip; existing?: StoredExpense }) {
+  // The draft is started once when this page opens; the category, payer and split pages share it.
+  useState(() => startDraft(trip, existing));
+  const draft = useDraft();
+  if (!draft || draft.tripId !== trip.id || draft.expenseId !== existing?.id) {
+    return null;
+  }
+  return <ExpenseForm trip={trip} existing={existing} draft={draft} />;
+}
+
 export default function ExpenseScreen() {
   const { tripId, expenseId } = useLocalSearchParams<{ tripId: string; expenseId?: string }>();
   const trip = useTrip(tripId);
@@ -429,7 +179,7 @@ export default function ExpenseScreen() {
   if (!trip) {
     return <EmptyState emoji="🤔" title="Trip not found" body="It may have been deleted from this phone." />;
   }
-  return <ExpenseForm trip={trip} existing={trip.expenses.find((expense) => expense.id === expenseId)} />;
+  return <ExpenseEditor trip={trip} existing={trip.expenses.find((expense) => expense.id === expenseId)} />;
 }
 
 const styles = StyleSheet.create({
@@ -437,69 +187,78 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: Spacing.three,
+    padding: Spacing.four,
+    gap: Spacing.five,
+  },
+  inputs: {
+    gap: Spacing.four,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.three,
   },
-  amountRow: {
+  editBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  description: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: 600,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: 2,
+  },
+  rupee: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rupeeText: {
+    fontSize: 28,
+    lineHeight: 36,
+    fontWeight: 800,
+  },
+  amount: {
+    flex: 1,
+    fontSize: 36,
+    fontWeight: 800,
+    paddingVertical: Spacing.one,
+    borderBottomWidth: 2,
+  },
+  sentence: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
   },
-  amountInput: {
-    minWidth: 96,
-    fontSize: 44,
-    fontWeight: 800,
-    paddingVertical: Spacing.one,
-  },
-  section: {
-    gap: Spacing.two,
-  },
-  chips: {
-    gap: Spacing.two,
-    paddingRight: Spacing.three,
-  },
-  chip: {
+  choice: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-    minHeight: 40,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
+    gap: Spacing.half,
+    maxWidth: '100%',
+    paddingLeft: Spacing.three,
+    paddingRight: Spacing.two,
+    paddingVertical: Spacing.two,
     borderRadius: Radius.pill,
-    borderWidth: StyleSheet.hairlineWidth,
   },
-  row: {
+  shares: {
+    gap: Spacing.two,
+  },
+  shareRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-  },
-  spread: {
-    justifyContent: 'space-between',
-  },
-  memberRow: {
-    minHeight: 44,
-  },
-  shareValue: {
-    minWidth: 32,
-    textAlign: 'center',
-  },
-  money: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    width: 124,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Radius.small,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  moneyInput: {
-    flex: 1,
-    minHeight: 40,
-    paddingVertical: Spacing.one,
-    fontSize: 16,
-    fontWeight: 600,
-    textAlign: 'right',
   },
   footer: {
     paddingHorizontal: Spacing.three,

@@ -9,7 +9,8 @@ export function upiLink(upiId: string, payeeName: string, amount: Paise, note: s
     ['cu', 'INR'],
     ['tn', note],
   ]
-    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    // UPI apps expect the @ of the UPI ID as it is, not escaped.
+    .map(([key, value]) => `${key}=${encodeURIComponent(value).replace(/%40/g, '@')}`)
     .join('&');
   return `upi://pay?${query}`;
 }

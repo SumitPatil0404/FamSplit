@@ -167,11 +167,15 @@ async function push(client: SupabaseClient, userId: string): Promise<Set<string>
       const steps: PromiseLike<{ error: { message: string } | null }>[] = [];
       // Databases set up before UPI ids existed have no such column, so only mention it when it is in use.
       const usesUpi = [...rows.members, ...(base ? tripToRows(base).members : [])].some((member) => member.upi_id);
+      // The same for expense categories, which came with update-4.sql.
+      const usesCategory = [...rows.expenses, ...(base ? tripToRows(base).expenses : [])].some((expense) => expense.category);
       for (const table of ['families', 'members', 'expenses', 'payments'] as const) {
         const upserts: object[] =
           table === 'members' && !usesUpi
             ? changes.members.upserts.map(({ upi_id: _upiId, ...member }) => member)
-            : changes[table].upserts;
+            : table === 'expenses' && !usesCategory
+              ? changes.expenses.upserts.map(({ category: _category, ...expense }) => expense)
+              : changes[table].upserts;
         const deletes = changes[table].deletes;
         if (upserts.length > 0) {
           steps.push(client.from(table).upsert(upserts, { onConflict: 'trip_id,id' }));
@@ -189,7 +193,7 @@ async function push(client: SupabaseClient, userId: string): Promise<Set<string>
     const problem = sent.find((result) => result.error)?.error;
     if (problem) {
       pushProblem = /column|schema cache/i.test(problem.message)
-        ? 'The database is missing its latest update. Run supabase/update-2.sql in the Supabase SQL editor.'
+        ? 'The database is missing its latest update. Run the newest supabase/update-*.sql file in the Supabase SQL editor.'
         : 'Some changes could not be saved to the server yet.';
       failed.add(trip.id);
       continue;

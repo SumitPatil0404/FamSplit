@@ -1,4 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,6 +10,7 @@ import { BalancePill, Button, Card, EmptyState, Fab, IconButton } from '@/compon
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { hasSeenWelcome } from '@/store/onboarding';
 import { plural, summarizeTrip } from '@/store/summary';
 import { createSampleTrip, deleteTrip, useTrips, type StoredTrip } from '@/store/trips';
 import { isShared, usePullToSync, useSync } from '@/sync/sync';
@@ -83,6 +85,13 @@ export default function TripsScreen() {
   const insets = useSafeAreaInsets();
   const trips = useTrips();
   const sync = useSync();
+
+  // The first time FamSplit opens on a phone, explain how it works before anything else.
+  useEffect(() => {
+    if (!hasSeenWelcome()) {
+      router.push('/welcome');
+    }
+  }, [router]);
 
   const header = (
     <Stack.Screen

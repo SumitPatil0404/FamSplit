@@ -17,6 +17,10 @@ export const Colors = {
     positiveSoft: '#DDF6EC',
     negative: '#E5484D',
     negativeSoft: '#FDECEC',
+    warning: '#B45309',
+    warningSoft: '#FEF3C7',
+    info: '#0369A1',
+    infoSoft: '#E0F2FE',
   },
   dark: {
     text: '#F4F3FA',
@@ -32,6 +36,10 @@ export const Colors = {
     positiveSoft: '#123A2E',
     negative: '#FF8580',
     negativeSoft: '#45201F',
+    warning: '#FBBF24',
+    warningSoft: '#3D2E0F',
+    info: '#38BDF8',
+    infoSoft: '#0C2F45',
   },
 } as const;
 

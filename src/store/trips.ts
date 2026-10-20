@@ -11,7 +11,11 @@ export type StoredMember = Member & {
   /** Where others can send this person money, e.g. name@bank. */
   upiId?: string;
 };
-export type StoredExpense = Expense & { date: string };
+export type StoredExpense = Expense & {
+  date: string;
+  /** One of the ids in categories.ts; older expenses have none and show a guess from the description. */
+  category?: string;
+};
 export type StoredPayment = Payment & { date: string };
 
 /** One line of the server's record of who changed what. Read-only on the phone. */
@@ -184,6 +188,10 @@ export function deleteTrip(tripId: string) {
     trips.filter((trip) => trip.id !== tripId),
     { removedTrip: trips.find((trip) => trip.id === tripId) },
   );
+}
+
+export function renameTrip(tripId: string, name: string) {
+  updateTrip(tripId, (trip) => ({ ...trip, name }));
 }
 
 export function setMe(tripId: string, memberId: string) {

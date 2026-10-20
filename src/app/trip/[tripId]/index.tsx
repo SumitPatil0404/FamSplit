@@ -74,6 +74,7 @@ export default function TripScreen() {
     router.push({ pathname: '/trip/[tripId]/family', params: { tripId, familyId } });
   const chooseMe = () => router.push({ pathname: '/trip/[tripId]/who', params: { tripId } });
   const openActivity = () => router.push({ pathname: '/trip/[tripId]/activity', params: { tripId } });
+  const openRename = () => router.push({ pathname: '/trip/[tripId]/rename', params: { tripId } });
   const finalised = Boolean(trip.finalizedAt);
   const confirmReopen = () =>
     confirmDialog({
@@ -89,7 +90,12 @@ export default function TripScreen() {
       <Stack.Screen
         options={{
           title: trip.name,
-          headerRight: () => <IconButton icon="history" label="Activity" onPress={openActivity} />,
+          headerRight: () => (
+            <View style={styles.headerButtons}>
+              <IconButton icon="edit" label="Rename trip" onPress={openRename} />
+              <IconButton icon="history" label="Activity" onPress={openActivity} />
+            </View>
+          ),
         }}
       />
       <ScrollView
@@ -167,6 +173,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.two,
+  },
+  headerButtons: {
+    flexDirection: 'row',
     gap: Spacing.two,
   },
   hero: {

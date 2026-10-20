@@ -28,6 +28,15 @@ const icons = {
   bell: { ios: 'bell.fill', android: 'notifications' },
   rupee: { ios: 'indianrupeesign', android: 'currency_rupee' },
   pdf: { ios: 'doc.richtext', android: 'picture_as_pdf' },
+  arrowForward: { ios: 'arrow.right', android: 'arrow_forward' },
+  handshake: { ios: 'person.2.fill', android: 'handshake' },
+  help: { ios: 'questionmark.circle', android: 'help' },
+  expandMore: { ios: 'chevron.down', android: 'expand_more' },
+  expandLess: { ios: 'chevron.up', android: 'expand_less' },
+  group: { ios: 'person.3.fill', android: 'groups' },
+  receipt: { ios: 'list.bullet.rectangle', android: 'receipt_long' },
+  copy: { ios: 'doc.on.doc', android: 'content_copy' },
+  openApp: { ios: 'arrow.up.right.square', android: 'open_in_new' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

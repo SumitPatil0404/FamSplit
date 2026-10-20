@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Linking, Share, StyleSheet, View } from 'react-native';
+import { Share, StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
+import { UpiPaySheet } from '@/components/trip/upi-pay';
 import { Avatar, Button, Card, EmptyState } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { formatPaise, upiLink, type Transfer } from '@/domain';
+import { formatPaise, type Transfer } from '@/domain';
 import { shareTripSummary } from '@/export/share';
 import { useTheme } from '@/hooks/use-theme';
 import type { TripSummary } from '@/store/summary';
@@ -39,6 +40,7 @@ function TransferRow({ trip, transfer, betweenFamilies, locked, signedIn }: Tran
   const to = name(transfer.toMemberId);
   const amount = formatPaise(transfer.amount);
   const payeeUpi = member(transfer.toMemberId)?.upiId;
+  const [paying, setPaying] = useState(false);
 
   // "Mine" means anyone in the family of whoever is using this phone.
   const myFamilyId = member(trip.meId)?.familyId;
@@ -58,23 +60,6 @@ function TransferRow({ trip, transfer, betweenFamilies, locked, signedIn }: Tran
           amount: transfer.amount,
         }),
     });
-
-  const payWithUpi = async () => {
-    if (!payeeUpi) {
-      return;
-    }
-    try {
-      await Linking.openURL(upiLink(payeeUpi, to, transfer.amount, `FamSplit: ${trip.name}`));
-    } catch {
-      confirmDialog({
-        icon: 'rupee',
-        title: 'No UPI app found',
-        message: `Install a UPI app such as Google Pay or PhonePe, or pay ${to} at ${payeeUpi} another way.`,
-        confirmLabel: 'OK',
-        hideCancel: true,
-      });
-    }
-  };
 
   const sendMessage = () =>
     Share.share({
@@ -143,10 +128,20 @@ function TransferRow({ trip, transfer, betweenFamilies, locked, signedIn }: Tran
       </View>
       {!locked && (
         <View style={styles.actions}>
-          {iPay && payeeUpi && <Button label="Pay with UPI" icon="rupee" compact onPress={() => void payWithUpi()} />}
+          {iPay && payeeUpi && <Button label="Pay with UPI" icon="rupee" compact onPress={() => setPaying(true)} />}
           {!iPay && <Button label="Remind" icon="bell" variant="soft" compact onPress={() => void remind()} />}
           <Button label="Mark as paid" icon="check" variant="soft" compact onPress={markPaid} />
         </View>
+      )}
+      {paying && payeeUpi && (
+        <UpiPaySheet
+          payee={to}
+          upiId={payeeUpi}
+          amount={transfer.amount}
+          note={`FamSplit: ${trip.name}`}
+          onClose={() => setPaying(false)}
+          onMarkPaid={markPaid}
+        />
       )}
     </View>
   );

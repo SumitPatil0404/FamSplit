@@ -34,6 +34,7 @@ export type ExpenseRow = {
   amount: number;
   paid_by: StoredTrip['expenses'][number]['paidBy'];
   split: StoredTrip['expenses'][number]['split'];
+  category: string | null;
   date: string;
 };
 export type PaymentRow = {
@@ -91,6 +92,7 @@ export function tripToRows(trip: StoredTrip): TripRows {
       amount: expense.amount,
       paid_by: expense.paidBy,
       split: expense.split,
+      category: expense.category ?? null,
       date: iso(expense.date),
     })),
     payments: trip.payments.map((payment) => ({
@@ -136,6 +138,7 @@ export function rowsToTrip(rows: TripRows, createdBy: string | null): StoredTrip
         amount: Number(row.amount),
         paidBy: row.paid_by,
         split: row.split,
+        ...(row.category ? { category: row.category } : {}),
         date: iso(row.date),
       }))
       .sort(newestFirst),

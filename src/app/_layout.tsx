@@ -41,11 +41,18 @@ export default function RootLayout() {
         <Stack.Screen name="account" options={{ title: 'Account', presentation: 'modal' }} />
         <Stack.Screen name="join" options={{ title: 'Join a trip', presentation: 'modal' }} />
         <Stack.Screen name="auth-callback" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="welcome" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
         <Stack.Screen name="trip/[tripId]/expense" options={{ title: 'Add expense', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/expense-details" options={{ title: '' }} />
+        <Stack.Screen name="trip/[tripId]/expense-category" options={{ title: 'Category', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/expense-payer" options={{ title: 'Paid by', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/expense-payers" options={{ title: 'Several people paid', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/expense-split" options={{ title: 'How is it split?', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/family" options={{ title: 'Add family', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/who" options={{ title: 'Which one is you?', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/activity" options={{ title: 'Activity', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/rename" options={{ title: 'Rename trip', presentation: 'modal' }} />
       </Stack>
       <ToastHost />
       <DialogHost />

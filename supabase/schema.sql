@@ -53,6 +53,7 @@ create table public.expenses (
   amount bigint not null check (amount > 0),
   paid_by jsonb not null,
   split jsonb not null,
+  category text,
   date timestamptz not null default now(),
   primary key (trip_id, id)
 );

@@ -2,6 +2,7 @@ import { upiLink } from '@/domain';
 import { buildSummaryHtml } from '@/export/summary';
 
 import { describeActivity } from '../activity';
+import { categoryOf, guessCategory } from '../categories';
 import { summarizeTrip } from '../summary';
 import type { ActivityEntry, StoredTrip } from '../trips';
 
@@ -47,7 +48,7 @@ const entry = (partial: Partial<ActivityEntry>): ActivityEntry => ({
 describe('describeActivity', () => {
   it('names who did it, or says Someone when they had not picked themselves', () => {
     const added = { after: { description: 'Dinner', amount: 840000 } };
-    expect(describeActivity(entry(added), trip)).toEqual({ who: 'Mahesh', what: 'added “Dinner”', detail: '₹8,400' });
+    expect(describeActivity(entry(added), trip)).toEqual({ kind: 'added', who: 'Mahesh', what: 'added “Dinner”', detail: '₹8,400' });
     expect(describeActivity(entry({ ...added, actorMemberId: null }), trip)?.who).toBe('Someone');
   });
 
@@ -60,7 +61,7 @@ describe('describeActivity', () => {
       }),
       trip,
     );
-    expect(line).toEqual({ who: 'Mahesh', what: 'changed “Dinner”', detail: '₹8,400 → ₹9,000 · who paid' });
+    expect(line).toEqual({ kind: 'changed', who: 'Mahesh', what: 'changed “Dinner”', detail: '₹8,400 → ₹9,000 · who paid' });
   });
 
   it('describes deletions, payments, finalising and people', () => {
@@ -82,6 +83,19 @@ describe('describeActivity', () => {
       'made Rajesh head of the Patel family',
     );
     expect(what({ entity: 'member', after: { name: 'Dadi', family_id: 'f2' } })).toBe('added Dadi to the Patel family');
+  });
+
+  it('tags each line with its kind so the log can colour it', () => {
+    const kind = (partial: Partial<ActivityEntry>) => describeActivity(entry(partial), trip)?.kind;
+    expect(kind({ after: { description: 'Cab', amount: 45000 } })).toBe('added');
+    expect(kind({ action: 'removed', before: { description: 'Cab', amount: 45000 } })).toBe('removed');
+    expect(kind({ action: 'changed', before: { description: 'Cab', category: null }, after: { description: 'Cab', category: 'cab' } })).toBe(
+      'changed',
+    );
+    expect(kind({ entity: 'payment', after: { from_member_id: 'm3', to_member_id: 'm1', amount: 100 } })).toBe('paid');
+    expect(kind({ entity: 'trip', action: 'changed', before: { finalized_at: null }, after: { finalized_at: '2026-10-05' } })).toBe(
+      'finalised',
+    );
   });
 
   it('skips changes that are not worth a line', () => {
@@ -130,7 +144,17 @@ describe('summarizeTrip', () => {
 describe('upiLink', () => {
   it('builds a standard UPI payment link with the amount in rupees', () => {
     expect(upiLink('ravi@okbank', 'Ravi Kumar', 25050, 'FamSplit: Goa & Gokarna')).toBe(
-      'upi://pay?pa=ravi%40okbank&pn=Ravi%20Kumar&am=250.50&cu=INR&tn=FamSplit%3A%20Goa%20%26%20Gokarna',
+      'upi://pay?pa=ravi@okbank&pn=Ravi%20Kumar&am=250.50&cu=INR&tn=FamSplit%3A%20Goa%20%26%20Gokarna',
     );
+  });
+});
+
+describe('categories', () => {
+  it('guesses from the description until one is picked', () => {
+    expect(guessCategory('Dinner at the beach shack').id).toBe('food');
+    expect(guessCategory('Ola to airport').id).toBe('cab');
+    expect(guessCategory('Something odd').id).toBe('other');
+    expect(categoryOf({ description: 'Dinner', category: 'party' }).id).toBe('party');
+    expect(categoryOf({ description: 'Dinner', category: 'retired-id' }).id).toBe('food');
   });
 });
