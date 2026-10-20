@@ -143,7 +143,9 @@ async function push(client: SupabaseClient, userId: string): Promise<Set<string>
     const first: PromiseLike<{ error: { message: string } | null }>[] = [];
     if (changes.isNew) {
       // "Ignore duplicates" makes a half-finished earlier upload safe to repeat.
-      const { finalized_at: _finalizedAt, ...created } = rows.trip;
+      // Family trips leave out the kind, so they still upload to a database without update-5.sql.
+      const { finalized_at: _finalizedAt, kind, ...shared } = rows.trip;
+      const created: object = kind === 'friends' ? { ...shared, kind } : shared;
       first.push(client.from('trips').upsert(created, { onConflict: 'id', ignoreDuplicates: true }));
     } else if (changes.renamed) {
       first.push(client.from('trips').update({ name: rows.trip.name }).eq('id', trip.id));
@@ -238,7 +240,7 @@ async function pull(client: SupabaseClient, userId: string, failed: Set<string>)
     .map((row) => ({
       ...rowsToTrip(
         {
-          trip: { ...row, finalized_at: row.finalized_at ?? null },
+          trip: { ...row, kind: row.kind ?? 'families', finalized_at: row.finalized_at ?? null },
           meId: meByTrip.get(row.id) ?? null,
           families: families.filter((family) => family.trip_id === row.id),
           members: members.filter((member) => member.trip_id === row.id),

@@ -9,6 +9,8 @@
 create table public.trips (
   id text primary key,
   name text not null,
+  -- 'families': heads settle first, then each family inside. 'friends': everyone settles with everyone.
+  kind text not null default 'families' check (kind in ('families', 'friends')),
   invite_code text not null unique,
   created_by uuid default auth.uid() references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),

@@ -6,6 +6,10 @@ import { FamilyColors } from '@/constants/theme';
 import { sampleTrip } from '@/data/sample-trip';
 import type { Expense, Family, Member, Payment } from '@/domain';
 
+import { isFriendsTrip, type TripKind } from './trip-kind';
+
+export { isFriendsTrip, type TripKind };
+
 export type StoredFamily = Family & { color: string };
 export type StoredMember = Member & {
   /** Where others can send this person money, e.g. name@bank. */
@@ -32,6 +36,8 @@ export type ActivityEntry = {
 export type StoredTrip = {
   id: string;
   name: string;
+  /** Chosen when the trip is created and never changed. Trips made before friends trips existed have none. */
+  kind?: TripKind;
   createdAt: string;
   /** Typed in by another family to join this trip. */
   inviteCode: string;
@@ -137,7 +143,8 @@ export function getMyName(): string {
   return Storage.getItemSync(MY_NAME_KEY) ?? '';
 }
 
-export function createTrip(input: { name: string; myName: string; familyName: string }): string {
+/** A friends trip leaves out familyName: the creator becomes a family of one. */
+export function createTrip(input: { name: string; myName: string; kind?: TripKind; familyName?: string }): string {
   const tripId = newId('trip');
   const familyId = newId('fam');
   const meId = newId('mem');
@@ -146,10 +153,11 @@ export function createTrip(input: { name: string; myName: string; familyName: st
     {
       id: tripId,
       name: input.name,
+      ...(input.kind === 'friends' ? { kind: 'friends' as const } : {}),
       createdAt: new Date().toISOString(),
       inviteCode: newInviteCode(),
       meId,
-      families: [{ id: familyId, name: input.familyName, headId: meId, color: FamilyColors[0] }],
+      families: [{ id: familyId, name: input.familyName ?? input.myName, headId: meId, color: FamilyColors[0] }],
       members: [{ id: meId, name: input.myName, familyId }],
       expenses: [],
       payments: [],
@@ -279,6 +287,36 @@ export function saveFamily(tripId: string, draft: FamilyDraft) {
   });
 }
 
+export type PersonDraft = { memberId?: string; name: string; upiId?: string };
+
+/** Adds or edits someone on a friends trip, keeping their family of one named after them. Returns their id. */
+export function savePerson(tripId: string, draft: PersonDraft): string {
+  const memberId = draft.memberId ?? newId('mem');
+  updateTrip(tripId, (trip) => {
+    const existing = trip.members.find((member) => member.id === draft.memberId);
+    if (existing) {
+      const { upiId: _upiId, ...rest } = existing;
+      return {
+        ...trip,
+        families: trip.families.map((family) => (family.id === existing.familyId ? { ...family, name: draft.name } : family)),
+        members: trip.members.map((member) =>
+          member.id === existing.id ? { ...rest, name: draft.name, ...(draft.upiId ? { upiId: draft.upiId } : {}) } : member,
+        ),
+      };
+    }
+    const familyId = newId('fam');
+    return {
+      ...trip,
+      families: [
+        ...trip.families,
+        { id: familyId, name: draft.name, headId: memberId, color: FamilyColors[trip.families.length % FamilyColors.length] },
+      ],
+      members: [...trip.members, { id: memberId, name: draft.name, familyId, ...(draft.upiId ? { upiId: draft.upiId } : {}) }],
+    };
+  });
+  return memberId;
+}
+
 export function deleteFamily(tripId: string, familyId: string) {
   updateTrip(tripId, (trip) => ({
     ...trip,
@@ -314,5 +352,34 @@ export function deletePayment(tripId: string, paymentId: string) {
   updateTrip(tripId, (trip) => ({
     ...trip,
     payments: trip.payments.filter((payment) => payment.id !== paymentId),
+  }));
+}
+
+export type PersonGroup = {
+  id: string;
+  /** "Sharma family", or null on a friends trip, where everyone is in one list. */
+  title: string | null;
+  color: string;
+  members: (StoredMember & { color: string })[];
+};
+
+/** People as the screens list them: by family, or all together on a friends trip. */
+export function personGroups(trip: StoredTrip): PersonGroup[] {
+  const colorOf = (familyId: string) => trip.families.find((family) => family.id === familyId)?.color ?? FamilyColors[0];
+  if (isFriendsTrip(trip)) {
+    return [
+      {
+        id: 'everyone',
+        title: null,
+        color: FamilyColors[0],
+        members: trip.members.map((member) => ({ ...member, color: colorOf(member.familyId) })),
+      },
+    ];
+  }
+  return trip.families.map((family) => ({
+    id: family.id,
+    title: `${family.name} family`,
+    color: family.color,
+    members: trip.members.filter((member) => member.familyId === family.id).map((member) => ({ ...member, color: family.color })),
   }));
 }

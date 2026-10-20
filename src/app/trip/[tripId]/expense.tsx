@@ -20,7 +20,7 @@ import {
   useDraft,
   type ExpenseDraft,
 } from '@/store/expense-draft';
-import { newId, saveExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
+import { isFriendsTrip, newId, saveExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
 
 /** A tappable word in the "Paid by … and split …" sentence. */
 function Choice({ label, onPress, accessibilityLabel }: { label: string; onPress: () => void; accessibilityLabel: string }) {
@@ -61,7 +61,8 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
     router.back();
   };
 
-  // What each family ends up paying, so the choices can be checked at a glance.
+  // What each family (on a friends trip, each person) ends up paying, so the choices can be checked at a glance.
+  const friends = isFriendsTrip(trip);
   const familyShares = trip.families
     .map((family) => ({
       family,
@@ -135,13 +136,13 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
         {preview && familyShares.length > 0 && (
           <Card style={styles.shares}>
             <ThemedText type="caption" themeColor="textSecondary">
-              EACH FAMILY’S SHARE
+              {friends ? 'EACH PERSON’S SHARE' : 'EACH FAMILY’S SHARE'}
             </ThemedText>
             {familyShares.map(({ family, share }) => (
               <View key={family.id} style={styles.shareRow}>
                 <Avatar name={family.name} color={family.color} size={28} />
                 <ThemedText style={styles.grow} numberOfLines={1}>
-                  {family.name} family
+                  {friends ? family.name : `${family.name} family`}
                 </ThemedText>
                 <ThemedText type="smallBold">{formatPaise(share)}</ThemedText>
               </View>

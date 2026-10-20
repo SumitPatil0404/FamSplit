@@ -158,3 +158,53 @@ describe('categories', () => {
     expect(categoryOf({ description: 'Dinner', category: 'retired-id' }).id).toBe('food');
   });
 });
+
+describe('friends trips', () => {
+  const friends: StoredTrip = {
+    ...trip,
+    kind: 'friends',
+    families: [
+      { id: 'f1', name: 'Rajesh', headId: 'm1', color: '#6C4DF6' },
+      { id: 'f2', name: 'Sunita', headId: 'm2', color: '#10B981' },
+      { id: 'f3', name: 'Mahesh', headId: 'm3', color: '#F59E0B' },
+    ],
+    members: [
+      { id: 'm1', name: 'Rajesh', familyId: 'f1' },
+      { id: 'm2', name: 'Sunita', familyId: 'f2' },
+      { id: 'm3', name: 'Mahesh', familyId: 'f3' },
+    ],
+    expenses: [
+      {
+        id: 'e1',
+        description: 'Villa',
+        amount: 900000,
+        paidBy: { m1: 900000 },
+        split: { type: 'equal', memberIds: ['m1', 'm2', 'm3'] },
+        date: '2026-10-02T10:00:00.000Z',
+      },
+    ],
+    payments: [],
+  };
+
+  it('settles person to person, with nothing left inside any family', () => {
+    const { settlement } = summarizeTrip(friends);
+    expect(settlement.betweenFamilies.map(({ fromMemberId, toMemberId, amount }) => [fromMemberId, toMemberId, amount])).toEqual([
+      ['m2', 'm1', 300000],
+      ['m3', 'm1', 300000],
+    ]);
+    expect([...settlement.withinFamily.values()].flat()).toEqual([]);
+  });
+
+  it('describes people without families in the log', () => {
+    const what = (partial: Partial<ActivityEntry>) => describeActivity(entry(partial), friends)?.what ?? null;
+    expect(what({ entity: 'member', after: { name: 'Dadi', family_id: 'f2' } })).toBe('added Dadi');
+    expect(what({ entity: 'family', after: { name: 'Dadi' } })).toBeNull();
+  });
+
+  it('prints people instead of families in the PDF', () => {
+    const html = buildSummaryHtml(friends, '2026-10-06T00:00:00.000Z');
+    expect(html).toContain('<h2>People</h2>');
+    expect(html).not.toContain('inside each family');
+    expect(html).toMatch(/Sunita<\/td><td>Rajesh<\/td><td class="amount">₹3,000/);
+  });
+});

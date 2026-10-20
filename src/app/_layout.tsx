@@ -50,6 +50,7 @@ export default function RootLayout() {
         <Stack.Screen name="trip/[tripId]/expense-payers" options={{ title: 'Several people paid', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-split" options={{ title: 'How is it split?', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/family" options={{ title: 'Add family', presentation: 'modal' }} />
+        <Stack.Screen name="trip/[tripId]/person" options={{ title: 'Add person', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/who" options={{ title: 'Which one is you?', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/activity" options={{ title: 'Activity', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/rename" options={{ title: 'Rename trip', presentation: 'modal' }} />

@@ -21,7 +21,7 @@ export default function JoinScreen() {
         title="Sign in to join a trip"
         body={
           sync.configured
-            ? 'Joining another family’s trip needs an account, so everyone sees the same expenses.'
+            ? 'Joining someone else’s trip needs an account, so everyone sees the same expenses.'
             : 'Sharing between phones is not set up in this build yet.'
         }>
         {sync.configured && <Button label="Sign in" onPress={() => router.replace('/account')} style={styles.button} />}
@@ -45,7 +45,7 @@ export default function JoinScreen() {
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ThemedText type="small" themeColor="textSecondary">
-          Ask whoever created the trip for its invite code. They can find it under Families in the trip.
+          Ask whoever created the trip for its invite code. They can find it under Families or People in the trip.
         </ThemedText>
         <Field
           label="Invite code"

@@ -2,34 +2,37 @@ APP NAME (30 characters max)
 FamSplit
 
 SHORT DESCRIPTION (80 characters max)
-Split trip expenses between families. Heads settle up, then each family inside.
+Split trip expenses with family or friends. Settle up in the fewest payments.
 
 FULL DESCRIPTION (4000 characters max)
-FamSplit makes trips with several families easy to settle.
+FamSplit makes shared trips easy to settle, whether you travel as several families or as a group of friends.
 
-When four or five families travel together, everyone pays for something: the hotel, the cabs, dinners, tickets. FamSplit keeps track of it all, then works out how to settle up: first between the families, then inside each family.
+Everyone pays for something: the hotel, the cabs, dinners, tickets. FamSplit keeps track of it all, then works out the fewest payments to settle up.
+
+TWO KINDS OF TRIP
+• Families: when four or five families travel together. Family heads settle with each other first, then each family squares up inside, through its own head.
+• Friends: for friends, colleagues or roommates. Everyone settles up with everyone, in as few payments as possible.
 
 HOW IT WORKS
-• Create a trip and add the families travelling together, with everyone in them, including children and grandparents who don't use the app.
-• Anyone can add an expense: who paid, and how it is split.
-• FamSplit works out what each family owes or gets back.
-• Family heads settle with each other first. Then each family squares up inside, through its own head.
+• Create a trip and add who is travelling, including children and grandparents who don't use the app.
+• Anyone can add an expense: what it was for, who paid, and how it is split.
+• FamSplit works out what each family or person owes or gets back.
 
 SPLIT IT YOUR WAY
 • Per person: everyone pays the same
-• Per family: each family pays the same, whatever its size
+• Per family (family trips): each family pays the same, whatever its size
 • By shares: give children a half share
 • Exact amounts: type in what each person owes
 • Several people paid? Enter what each one paid.
 
 SETTLE UP WITHOUT THE MATHS
-• Just a few payments between family heads
+• Just a few payments, between family heads or between friends
 • Mark payments as paid, and see them alongside the expenses
 • Pay with UPI: opens your own UPI app with the amount filled in
 • Send a reminder notification to whoever owes
 
 SHARE THE TRIP
-• Sign in with Google and invite the other families with a code
+• Sign in with Google and invite the others with a code
 • Everyone sees new expenses as they are added, with notifications
 • An activity log shows who added, changed or deleted what
 • Works offline and syncs when you are back online

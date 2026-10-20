@@ -34,6 +34,7 @@ const icons = {
   expandMore: { ios: 'chevron.down', android: 'expand_more' },
   expandLess: { ios: 'chevron.up', android: 'expand_less' },
   group: { ios: 'person.3.fill', android: 'groups' },
+  family: { ios: 'figure.2.and.child.holdinghands', android: 'family_restroom' },
   receipt: { ios: 'list.bullet.rectangle', android: 'receipt_long' },
   copy: { ios: 'doc.on.doc', android: 'content_copy' },
   openApp: { ios: 'arrow.up.right.square', android: 'open_in_new' },

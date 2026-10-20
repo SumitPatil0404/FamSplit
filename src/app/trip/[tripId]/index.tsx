@@ -7,14 +7,14 @@ import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ExpensesTab } from '@/components/trip/expenses-tab';
-import { FamiliesTab } from '@/components/trip/families-tab';
+import { FamiliesTab, PeopleTab } from '@/components/trip/families-tab';
 import { SettleTab } from '@/components/trip/settle-tab';
 import { Button, Card, EmptyState, Fab, IconButton, Segmented } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDay, plural, summarizeTrip, type TripSummary } from '@/store/summary';
-import { canFinalize, reopenTrip, useTrip, type StoredTrip } from '@/store/trips';
+import { canFinalize, isFriendsTrip, reopenTrip, useTrip, type StoredTrip } from '@/store/trips';
 import { usePullToSync, useSync } from '@/sync/sync';
 
 type Tab = 'expenses' | 'families' | 'settle';
@@ -22,16 +22,19 @@ type Tab = 'expenses' | 'families' | 'settle';
 function Hero({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
   const theme = useTheme();
   const { myFamily, myFamilyNet, totalSpent } = summary;
-  const who = myFamily ? `${myFamily.name} family` : 'Your family';
+  const friends = isFriendsTrip(trip);
+  const who = friends ? 'You' : myFamily ? `${myFamily.name} family` : 'Your family';
   const status = summary.incomplete
     ? 'Still syncing this trip…'
     : totalSpent === 0
       ? 'Add an expense to get started'
-      : myFamilyNet > 0
-        ? `${who} gets back ${formatPaise(myFamilyNet)}`
-        : myFamilyNet < 0
-          ? `${who} owes ${formatPaise(-myFamilyNet)}`
-          : `${who} is all settled`;
+      : friends && !trip.meId
+        ? 'Tell us which one is you'
+        : myFamilyNet > 0
+          ? `${who} ${friends ? 'get' : 'gets'} back ${formatPaise(myFamilyNet)}`
+          : myFamilyNet < 0
+            ? `${who} ${friends ? 'owe' : 'owes'} ${formatPaise(-myFamilyNet)}`
+            : `${who} ${friends ? 'are' : 'is'} all settled`;
 
   return (
     <View style={[styles.hero, { backgroundColor: theme.primary }]}>
@@ -47,8 +50,8 @@ function Hero({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
         </ThemedText>
       </View>
       <ThemedText type="caption" style={styles.heroMuted}>
-        {plural(trip.families.length, 'family', 'families')} · {plural(trip.members.length, 'person', 'people')} ·{' '}
-        {plural(trip.expenses.length, 'expense', 'expenses')}
+        {friends ? 'Friends' : plural(trip.families.length, 'family', 'families')} ·{' '}
+        {plural(trip.members.length, 'person', 'people')} · {plural(trip.expenses.length, 'expense', 'expenses')}
       </ThemedText>
     </View>
   );
@@ -69,7 +72,10 @@ export default function TripScreen() {
 
   const summary = summarizeTrip(trip);
   const addExpense = () => router.push({ pathname: '/trip/[tripId]/expense', params: { tripId } });
-  const addFamily = () => router.push({ pathname: '/trip/[tripId]/family', params: { tripId } });
+  const friends = isFriendsTrip(trip);
+  const addFamily = () =>
+    router.push(friends ? { pathname: '/trip/[tripId]/person', params: { tripId } } : { pathname: '/trip/[tripId]/family', params: { tripId } });
+  const editPerson = (memberId: string) => router.push({ pathname: '/trip/[tripId]/person', params: { tripId, memberId } });
   const editFamily = (familyId: string) =>
     router.push({ pathname: '/trip/[tripId]/family', params: { tripId, familyId } });
   const chooseMe = () => router.push({ pathname: '/trip/[tripId]/who', params: { tripId } });
@@ -122,7 +128,7 @@ export default function TripScreen() {
           <Card>
             <ThemedText type="bold">Which one is you?</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Pick yourself to see what your family owes or gets back.
+              {friends ? 'Pick yourself to see what you owe or get back.' : 'Pick yourself to see what your family owes or gets back.'}
             </ThemedText>
             <Button label="Choose" variant="soft" compact onPress={chooseMe} style={styles.start} />
           </Card>
@@ -132,14 +138,24 @@ export default function TripScreen() {
           onChange={setTab}
           options={[
             { value: 'expenses', label: 'Expenses' },
-            { value: 'families', label: 'Families' },
+            { value: 'families', label: friends ? 'People' : 'Families' },
             { value: 'settle', label: 'Settle up' },
           ]}
         />
         {tab === 'expenses' && (
           <ExpensesTab trip={trip} finalised={finalised} onAddFamily={addFamily} onAddExpense={addExpense} />
         )}
-        {tab === 'families' && (
+        {tab === 'families' && friends && (
+          <PeopleTab
+            trip={trip}
+            summary={summary}
+            finalised={finalised}
+            onAddPerson={addFamily}
+            onEditPerson={editPerson}
+            onChooseMe={chooseMe}
+          />
+        )}
+        {tab === 'families' && !friends && (
           <FamiliesTab
             trip={trip}
             summary={summary}

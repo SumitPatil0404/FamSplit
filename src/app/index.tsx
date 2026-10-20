@@ -6,13 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
-import { BalancePill, Button, Card, EmptyState, Fab, IconButton } from '@/components/ui';
+import { BalancePill, Button, Card, EmptyState, Fab, IconButton, Tag } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { hasSeenWelcome } from '@/store/onboarding';
 import { plural, summarizeTrip } from '@/store/summary';
-import { createSampleTrip, deleteTrip, useTrips, type StoredTrip } from '@/store/trips';
+import { createSampleTrip, deleteTrip, isFriendsTrip, useTrips, type StoredTrip } from '@/store/trips';
 import { isShared, usePullToSync, useSync } from '@/sync/sync';
 
 function TripCard({ trip }: { trip: StoredTrip }) {
@@ -20,6 +20,7 @@ function TripCard({ trip }: { trip: StoredTrip }) {
   const theme = useTheme();
   const sync = useSync();
   const { myFamilyNet, totalSpent, incomplete } = summarizeTrip(trip);
+  const friends = isFriendsTrip(trip);
 
   // Someone else's trip can only be left; your own is deleted for everyone.
   const leaving = isShared(trip.id) && trip.createdBy !== undefined && trip.createdBy !== sync.session?.user.id;
@@ -29,10 +30,10 @@ function TripCard({ trip }: { trip: StoredTrip }) {
       tone: 'danger',
       title: leaving ? `Leave "${trip.name}"?` : `Delete "${trip.name}"?`,
       message: leaving
-        ? 'It is removed from this phone. The other families keep it, and you can join again with the code.'
+        ? 'It is removed from this phone. Everyone else keeps it, and you can join again with the code.'
         : isShared(trip.id)
-          ? 'All its families, expenses and payments are deleted for everyone on the trip.'
-          : 'All its families, expenses and payments will be removed from this phone.',
+          ? 'All its people, expenses and payments are deleted for everyone on the trip.'
+          : 'All its people, expenses and payments will be removed from this phone.',
       confirmLabel: leaving ? 'Leave trip' : 'Delete trip',
       onConfirm: () => deleteTrip(trip.id),
     });
@@ -45,30 +46,37 @@ function TripCard({ trip }: { trip: StoredTrip }) {
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
       <Card>
         <View style={styles.row}>
-          <View style={[styles.tile, { backgroundColor: theme.primarySoft }]}>
-            <Icon name="trip" size={24} color={theme.primary} />
+          <View style={[styles.tile, { backgroundColor: friends ? theme.infoSoft : theme.primarySoft }]}>
+            <Icon name={friends ? 'group' : 'family'} size={24} color={friends ? theme.info : theme.primary} />
           </View>
           <View style={styles.grow}>
             <ThemedText type="bold">{trip.name}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {plural(trip.families.length, 'family', 'families')} · {plural(trip.members.length, 'person', 'people')}
-            </ThemedText>
+            <View style={styles.meta}>
+              <Tag label={friends ? 'Friends' : 'Families'} />
+              <ThemedText type="small" themeColor="textSecondary">
+                {friends
+                  ? plural(trip.members.length, 'person', 'people')
+                  : `${plural(trip.families.length, 'family', 'families')} · ${plural(trip.members.length, 'person', 'people')}`}
+              </ThemedText>
+            </View>
           </View>
           <Icon name="chevronRight" size={20} color={theme.textSecondary} />
         </View>
         <View style={[styles.row, styles.footer]}>
           <BalancePill
             amount={myFamilyNet}
-            positive="Your family gets back"
-            negative="Your family owes"
+            positive={friends ? 'You get back' : 'Your family gets back'}
+            negative={friends ? 'You owe' : 'Your family owes'}
             settled={
               incomplete
                 ? 'Still syncing…'
                 : totalSpent === 0
                   ? 'No expenses yet'
-                  : trip.meId
-                    ? 'Your family is settled'
-                    : 'Tell us who you are'
+                  : !trip.meId
+                    ? 'Tell us who you are'
+                    : friends
+                      ? 'You are settled'
+                      : 'Your family is settled'
             }
           />
           <ThemedText type="small" numberOfLines={1} themeColor="textSecondary">
@@ -149,9 +157,9 @@ export default function TripsScreen() {
         )}
         {sync.configured && !sync.session && (
           <Card>
-            <ThemedText type="bold">Travelling with other families?</ThemedText>
+            <ThemedText type="bold">Travelling with others?</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Sign in so they can join your trips with a code and everyone sees the same expenses.
+              Sign in so your family or friends can join your trips with a code and everyone sees the same expenses.
             </ThemedText>
             <Button label="Sign in" variant="soft" compact onPress={() => router.push('/account')} style={styles.start} />
           </Card>
@@ -201,6 +209,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    marginTop: Spacing.half,
   },
   tile: {
     width: 48,

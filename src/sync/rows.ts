@@ -4,6 +4,8 @@ import type { ActivityEntry, StoredTrip } from '@/store/trips';
 export type TripRow = {
   id: string;
   name: string;
+  /** Missing on databases without update-5.sql, and null for trips made before it. */
+  kind?: string | null;
   invite_code: string;
   created_at: string;
   finalized_at: string | null;
@@ -64,6 +66,7 @@ export function tripToRows(trip: StoredTrip): TripRows {
     trip: {
       id: trip.id,
       name: trip.name,
+      kind: trip.kind ?? 'families',
       invite_code: trip.inviteCode,
       created_at: iso(trip.createdAt),
       finalized_at: trip.finalizedAt ? iso(trip.finalizedAt) : null,
@@ -114,6 +117,7 @@ export function rowsToTrip(rows: TripRows, createdBy: string | null): StoredTrip
   return {
     id: rows.trip.id,
     name: rows.trip.name,
+    ...(rows.trip.kind === 'friends' ? { kind: 'friends' as const } : {}),
     inviteCode: rows.trip.invite_code,
     createdAt: iso(rows.trip.created_at),
     createdBy: createdBy ?? undefined,

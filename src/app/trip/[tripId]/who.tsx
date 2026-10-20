@@ -2,9 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Avatar, Card, Checkbox, EmptyState, Tag } from '@/components/ui';
+import { Avatar, Button, Card, Checkbox, EmptyState, Tag } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
-import { setMe, useTrip } from '@/store/trips';
+import { isFriendsTrip, setMe, useTrip } from '@/store/trips';
 
 export default function WhoScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
@@ -22,11 +22,40 @@ export default function WhoScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <ThemedText type="small" themeColor="textSecondary">
-        Pick yourself so the app can show what your family owes or gets back. If you are not listed, add yourself to
-        your family under Families first.
-      </ThemedText>
-      {trip.families.map((family) => (
+      {isFriendsTrip(trip) ? (
+        <>
+          <ThemedText type="small" themeColor="textSecondary">
+            Pick yourself so the app can show what you owe or get back. Not on the list? Add yourself below.
+          </ThemedText>
+          <Card>
+            {trip.members.map((member) => (
+              <Pressable
+                key={member.id}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: member.id === trip.meId }}
+                onPress={() => choose(member.id)}
+                style={[styles.row, styles.member]}>
+                <Checkbox checked={member.id === trip.meId} />
+                <ThemedText style={styles.grow}>{member.name}</ThemedText>
+              </Pressable>
+            ))}
+          </Card>
+          {!trip.finalizedAt && (
+            <Button
+              label="I’m not on the list, add me"
+              icon="personAdd"
+              variant="soft"
+              onPress={() => router.replace({ pathname: '/trip/[tripId]/person', params: { tripId: trip.id, asMe: '1' } })}
+            />
+          )}
+        </>
+      ) : (
+        <ThemedText type="small" themeColor="textSecondary">
+          Pick yourself so the app can show what your family owes or gets back. If you are not listed, add yourself to
+          your family under Families first.
+        </ThemedText>
+      )}
+      {!isFriendsTrip(trip) && trip.families.map((family) => (
         <Card key={family.id}>
           <View style={styles.row}>
             <Avatar name={family.name} color={family.color} size={32} />

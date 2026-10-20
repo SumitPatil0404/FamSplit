@@ -12,7 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { describeActivity } from '@/store/activity';
 import { categoryOf } from '@/store/categories';
 import { formatDay } from '@/store/summary';
-import { deleteExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
+import { deleteExpense, isFriendsTrip, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
 
 const SPLIT_NAMES: Record<Split['type'], string> = {
   equal: 'equally per person',
@@ -138,6 +138,18 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
               return null;
             }
             const total = people.reduce((sum, person) => sum + (shares.get(person.id) ?? 0), 0);
+            // On a friends trip each "family" is one person, so a single line says it all.
+            if (isFriendsTrip(trip)) {
+              return (
+                <View key={family.id} style={styles.row}>
+                  <Avatar name={people[0].name} color={family.color} size={32} />
+                  <ThemedText style={styles.grow} numberOfLines={1}>
+                    {nameOf(people[0].id)}
+                  </ThemedText>
+                  <ThemedText type="bold">{formatPaise(total)}</ThemedText>
+                </View>
+              );
+            }
             return (
               <View key={family.id} style={styles.family}>
                 <View style={styles.row}>

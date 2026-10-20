@@ -8,7 +8,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { readDraft, sum, updateDraft, useDraft } from '@/store/expense-draft';
-import { useTrip } from '@/store/trips';
+import { personGroups, useTrip } from '@/store/trips';
 
 export default function PayerScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
@@ -39,37 +39,43 @@ export default function PayerScreen() {
         </ThemedText>
       </View>
 
-      {trip.families.map((family) => (
-        <View key={family.id} style={styles.group}>
-          <View style={styles.familyHeading}>
-            <View style={[styles.dot, { backgroundColor: family.color }]} />
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              {family.name} family
-            </ThemedText>
-          </View>
+      {personGroups(trip).map((group) => (
+        <View key={group.id} style={styles.group}>
+          {group.title && (
+            <View style={styles.familyHeading}>
+              <View style={[styles.dot, { backgroundColor: group.color }]} />
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                {group.title}
+              </ThemedText>
+            </View>
+          )}
           <Card style={styles.list}>
-            {trip.members
-              .filter((member) => member.familyId === family.id)
-              .map((member) => {
-                const selected = !several && member.id === draft.payerId;
-                return (
-                  <Pressable
-                    key={member.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    onPress={() => choose(member.id)}
-                    style={({ pressed }) => [
-                      styles.row,
-                      { backgroundColor: selected ? theme.primarySoft : pressed ? theme.backgroundSelected : 'transparent' },
-                    ]}>
-                    <Avatar name={member.name} color={family.color} size={36} />
-                    <ThemedText type={selected ? 'bold' : 'default'} style={styles.grow} numberOfLines={1}>
-                      {nameOf(member.id, member.name)}
-                    </ThemedText>
-                    <Checkbox checked={selected} />
-                  </Pressable>
-                );
-              })}
+            {group.members.map((member) => {
+              const selected = !several && member.id === draft.payerId;
+              return (
+                <Pressable
+                  key={member.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => choose(member.id)}
+                  style={({ pressed }) => [
+                    styles.row,
+                    {
+                      backgroundColor: selected
+                        ? theme.primarySoft
+                        : pressed
+                          ? theme.backgroundSelected
+                          : 'transparent',
+                    },
+                  ]}>
+                  <Avatar name={member.name} color={member.color} size={36} />
+                  <ThemedText type={selected ? 'bold' : 'default'} style={styles.grow} numberOfLines={1}>
+                    {nameOf(member.id, member.name)}
+                  </ThemedText>
+                  <Checkbox checked={selected} />
+                </Pressable>
+              );
+            })}
           </Card>
         </View>
       ))}

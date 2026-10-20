@@ -1,5 +1,6 @@
 import { formatPaise, settleTrip, type Split } from '@/domain';
 import { formatDay } from '@/store/summary';
+import { isFriendsTrip } from '@/store/trip-kind';
 import type { StoredTrip } from '@/store/trips';
 
 const escapeHtml = (text: string) =>
@@ -33,6 +34,7 @@ export function buildSummaryHtml(trip: StoredTrip, generatedAt = new Date().toIS
   const spending = settleTrip({ ...trip, payments: [] });
   const total = trip.expenses.reduce((sum, expense) => sum + expense.amount, 0);
 
+  const friends = isFriendsTrip(trip);
   const families = trip.families.map((family) => {
     const ids = new Set(trip.members.filter((member) => member.familyId === family.id).map((member) => member.id));
     const paid = trip.expenses.reduce(
@@ -42,8 +44,7 @@ export function buildSummaryHtml(trip: StoredTrip, generatedAt = new Date().toIS
     const share = paid - (spending.familyNets.get(family.id) ?? 0);
     const net = now.familyNets.get(family.id) ?? 0;
     return [
-      `${family.name} (head: ${name(family.headId)})`,
-      String(ids.size),
+      ...(friends ? [name(family.headId)] : [`${family.name} (head: ${name(family.headId)})`, String(ids.size)]),
       formatPaise(paid),
       formatPaise(share),
       net === 0 ? 'Settled' : net > 0 ? `Gets back ${formatPaise(net)}` : `Owes ${formatPaise(-net)}`,
@@ -64,8 +65,8 @@ export function buildSummaryHtml(trip: StoredTrip, generatedAt = new Date().toIS
     ]);
 
   const betweenFamilies = now.betweenFamilies.map((transfer) => [
-    `${name(transfer.fromMemberId)} (${familyName(transfer.fromFamilyId)})`,
-    `${name(transfer.toMemberId)} (${familyName(transfer.toFamilyId)})`,
+    friends ? name(transfer.fromMemberId) : `${name(transfer.fromMemberId)} (${familyName(transfer.fromFamilyId)})`,
+    friends ? name(transfer.toMemberId) : `${name(transfer.toMemberId)} (${familyName(transfer.toFamilyId)})`,
     formatPaise(transfer.amount),
   ]);
 
@@ -102,19 +103,27 @@ export function buildSummaryHtml(trip: StoredTrip, generatedAt = new Date().toIS
 </head>
 <body>
   <h1>${escapeHtml(trip.name)}</h1>
-  <div class="muted">${trip.families.length} families · ${trip.members.length} people · ${trip.expenses.length} expenses${
+  <div class="muted">${friends ? 'Friends' : `${trip.families.length} families`} · ${trip.members.length} people · ${trip.expenses.length} expenses${
     trip.finalizedAt ? ` · finalised on ${formatDay(trip.finalizedAt)}` : ''
   }</div>
   <div class="total">Total spent: ${formatPaise(total)}</div>
 
-  <h2>Families</h2>
+  ${
+    friends
+      ? `<h2>People</h2>
+  ${table(['Person', 'Paid', 'Share of spending', 'Now'], families, 'No one yet.')}
+
+  <h2>Still to pay</h2>
+  ${table(['From', 'To', 'Amount'], betweenFamilies, 'Everyone is settled.')}`
+      : `<h2>Families</h2>
   ${table(['Family', 'People', 'Paid', 'Share of spending', 'Now'], families, 'No families yet.')}
 
   <h2>Still to pay between families</h2>
   ${table(['From', 'To', 'Amount'], betweenFamilies, 'All families are settled.')}
 
   <h2>Still to pay inside each family</h2>
-  ${table(['Family', 'From', 'To', 'Amount'], withinFamilies, 'Nothing left to settle inside any family.')}
+  ${table(['Family', 'From', 'To', 'Amount'], withinFamilies, 'Nothing left to settle inside any family.')}`
+  }
 
   <h2>Payments made</h2>
   ${table(['Date', 'From', 'To', 'Amount'], payments, 'No payments recorded yet.')}

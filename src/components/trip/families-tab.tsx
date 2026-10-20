@@ -7,7 +7,7 @@ import { Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import type { TripSummary } from '@/store/summary';
-import { formatInviteCode, type StoredTrip } from '@/store/trips';
+import { formatInviteCode, isFriendsTrip, type StoredTrip } from '@/store/trips';
 import { isShared, useSync } from '@/sync/sync';
 
 type Props = {
@@ -23,6 +23,7 @@ type Props = {
 function InviteCard({ trip }: { trip: StoredTrip }) {
   const router = useRouter();
   const sync = useSync();
+  const title = isFriendsTrip(trip) ? 'Invite your friends' : 'Invite the other families';
 
   if (!sync.configured) {
     return null;
@@ -30,7 +31,7 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
   if (!sync.session) {
     return (
       <Card>
-        <ThemedText type="bold">Invite the other families</ThemedText>
+        <ThemedText type="bold">{title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           Sign in to get a code they can join this trip with.
         </ThemedText>
@@ -41,7 +42,7 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
   if (!isShared(trip.id)) {
     return (
       <Card>
-        <ThemedText type="bold">Invite the other families</ThemedText>
+        <ThemedText type="bold">{title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {sync.error ?? 'Uploading this trip. The invite code appears in a moment.'}
         </ThemedText>
@@ -57,7 +58,7 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
 
   return (
     <Card>
-      <ThemedText type="bold">Invite the other families</ThemedText>
+      <ThemedText type="bold">{title}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         Anyone with this code can join the trip and add expenses.
       </ThemedText>
@@ -134,7 +135,61 @@ export function FamiliesTab({ trip, summary, finalised, onAddFamily, onEditFamil
   );
 }
 
+type PeopleProps = {
+  trip: StoredTrip;
+  summary: TripSummary;
+  finalised: boolean;
+  onAddPerson: () => void;
+  onEditPerson: (memberId: string) => void;
+  onChooseMe: () => void;
+};
+
+/** A friends trip's version of the Families tab: one list of people. */
+export function PeopleTab({ trip, summary, finalised, onAddPerson, onEditPerson, onChooseMe }: PeopleProps) {
+  const colorOf = (familyId: string) => trip.families.find((family) => family.id === familyId)?.color ?? '#8E8CA3';
+
+  return (
+    <View style={styles.list}>
+      <InviteCard trip={trip} />
+      <ThemedText type="caption" themeColor="textSecondary">
+        Each amount is what that person paid minus their share
+      </ThemedText>
+
+      <Card style={styles.people}>
+        {trip.members.map((member) => (
+          <View key={member.id} style={styles.row}>
+            <Avatar name={member.name} color={colorOf(member.familyId)} size={40} />
+            <View style={styles.grow}>
+              <View style={styles.nameRow}>
+                <ThemedText type="bold">{member.name}</ThemedText>
+                {member.id === trip.meId && <Tag label="You" />}
+              </View>
+              <BalancePill
+                amount={summary.settlement.memberNets.get(member.id) ?? 0}
+                positive="Gets back"
+                negative="Owes"
+                settled="Settled"
+              />
+            </View>
+            <IconButton icon="edit" label={`Edit ${member.name}`} onPress={() => onEditPerson(member.id)} />
+          </View>
+        ))}
+      </Card>
+
+      {!finalised && <Button label="Add people" icon="personAdd" variant="soft" onPress={onAddPerson} />}
+      <Pressable accessibilityRole="button" hitSlop={8} onPress={onChooseMe} style={styles.link}>
+        <ThemedText type="smallBold" themeColor="primary">
+          {trip.meId ? 'Not you? Change who you are' : 'Tell us which one is you'}
+        </ThemedText>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  people: {
+    gap: Spacing.three,
+  },
   list: {
     gap: Spacing.three,
   },

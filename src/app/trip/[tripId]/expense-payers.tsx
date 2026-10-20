@@ -10,7 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { parseAmount, parseAmounts, SEVERAL, sum, updateDraft, useDraft } from '@/store/expense-draft';
-import { useTrip } from '@/store/trips';
+import { personGroups, useTrip } from '@/store/trips';
 
 /** When more than one person paid: what each one put in. Nothing changes until Done is tapped. */
 export default function SeveralPayersScreen() {
@@ -50,40 +50,46 @@ export default function SeveralPayersScreen() {
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.intro}>
-          <ThemedText type="heading">{total > 0 ? `Who put in the ${formatPaise(total)}?` : 'Who put in how much?'}</ThemedText>
+          <ThemedText type="heading">
+            {total > 0 ? `Who put in the ${formatPaise(total)}?` : 'Who put in how much?'}
+          </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             Leave anyone who paid nothing empty.
           </ThemedText>
         </View>
 
-        {trip.families.map((family) => (
-          <Card key={family.id} style={styles.card}>
-            <View style={styles.familyHeading}>
-              <View style={[styles.dot, { backgroundColor: family.color }]} />
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                {family.name} family
-              </ThemedText>
-            </View>
-            {trip.members
-              .filter((member) => member.familyId === family.id)
-              .map((member) => (
-                <View key={member.id} style={styles.row}>
-                  <Avatar name={member.name} color={family.color} size={32} />
-                  <ThemedText style={styles.grow} numberOfLines={1}>
-                    {member.id === trip.meId ? `${member.name} (you)` : member.name}
-                  </ThemedText>
-                  <MoneyInput
-                    label={`Paid by ${member.name}`}
-                    value={texts[member.id] ?? ''}
-                    onChange={(text) => setTexts({ ...texts, [member.id]: text })}
-                  />
-                </View>
-              ))}
+        {personGroups(trip).map((group) => (
+          <Card key={group.id} style={styles.card}>
+            {group.title && (
+              <View style={styles.familyHeading}>
+                <View style={[styles.dot, { backgroundColor: group.color }]} />
+                <ThemedText type="smallBold" themeColor="textSecondary">
+                  {group.title}
+                </ThemedText>
+              </View>
+            )}
+            {group.members.map((member) => (
+              <View key={member.id} style={styles.row}>
+                <Avatar name={member.name} color={member.color} size={32} />
+                <ThemedText style={styles.grow} numberOfLines={1}>
+                  {member.id === trip.meId ? `${member.name} (you)` : member.name}
+                </ThemedText>
+                <MoneyInput
+                  label={`Paid by ${member.name}`}
+                  value={texts[member.id] ?? ''}
+                  onChange={(text) => setTexts({ ...texts, [member.id]: text })}
+                />
+              </View>
+            ))}
           </Card>
         ))}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderColor: theme.border }]}>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderColor: theme.border },
+        ]}>
         <View style={styles.status}>
           {total > 0 ? (
             <Tally entered={entered} total={total} />

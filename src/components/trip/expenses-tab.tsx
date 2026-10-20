@@ -10,7 +10,7 @@ import { expenseShares, formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { categoryOf } from '@/store/categories';
 import { formatDay } from '@/store/summary';
-import { deletePayment, type StoredExpense, type StoredPayment, type StoredTrip } from '@/store/trips';
+import { deletePayment, isFriendsTrip, type StoredExpense, type StoredPayment, type StoredTrip } from '@/store/trips';
 
 /** Empty when the expense refers to people who have not been downloaded yet. */
 function sharesOf(expense: StoredExpense, trip: StoredTrip): Map<string, number> {
@@ -88,7 +88,11 @@ function PaymentRow({ trip, payment }: { trip: StoredTrip; payment: StoredPaymen
   const fromName = from?.name ?? 'Someone';
   const toName = to?.name ?? 'someone';
   const family = trip.families.find((candidate) => candidate.id === from?.familyId);
-  const where = from && to && from.familyId === to.familyId ? `Inside the ${family?.name ?? ''} family` : 'Between families';
+  const where = isFriendsTrip(trip)
+    ? 'Settled up'
+    : from && to && from.familyId === to.familyId
+      ? `Inside the ${family?.name ?? ''} family`
+      : 'Between families';
 
   const confirmUndo = () =>
     confirmDialog({
@@ -143,20 +147,33 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
     return <EmptyState emoji="🔒" title="No expenses" body="This trip was finalised without any expenses. Reopen it to add some." />;
   }
 
+  const friends = isFriendsTrip(trip);
   if (trip.families.length < 2) {
     return (
       <EmptyState
         emoji="🙌"
         title="Who is coming along?"
-        body="Add the other families on this trip, then start adding expenses.">
-        <Button label="Add a family" icon="groupAdd" onPress={onAddFamily} style={styles.cta} />
+        body={
+          friends
+            ? 'Add the people on this trip, or share the invite code under People. Then start adding expenses.'
+            : 'Add the other families on this trip, then start adding expenses.'
+        }>
+        <Button
+          label={friends ? 'Add people' : 'Add a family'}
+          icon={friends ? 'personAdd' : 'groupAdd'}
+          onPress={onAddFamily}
+          style={styles.cta}
+        />
       </EmptyState>
     );
   }
 
   if (trip.expenses.length === 0 && trip.payments.length === 0) {
     return (
-      <EmptyState emoji="🧾" title="No expenses yet" body="Add the first thing someone paid for. Anyone in any family can be the payer.">
+      <EmptyState
+        emoji="🧾"
+        title="No expenses yet"
+        body={friends ? 'Add the first thing someone paid for.' : 'Add the first thing someone paid for. Anyone in any family can be the payer.'}>
         <Button label="Add an expense" icon="add" onPress={onAddExpense} style={styles.cta} />
       </EmptyState>
     );
@@ -169,9 +186,11 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
 
   return (
     <View style={styles.list}>
-      <ThemedText type="caption" themeColor="textSecondary">
-        “You” means your whole family on this trip
-      </ThemedText>
+      {!friends && (
+        <ThemedText type="caption" themeColor="textSecondary">
+          “You” means your whole family on this trip
+        </ThemedText>
+      )}
       {timeline.map((entry) =>
         entry.kind === 'expense' ? (
           <ExpenseRow key={entry.item.id} trip={trip} expense={entry.item} />

@@ -58,6 +58,14 @@ describe('tripToRows and rowsToTrip', () => {
     expect(rowsToTrip(shuffled, 'user-a')).toEqual(trip);
   });
 
+  it('keeps a friends trip a friends trip, and reads older trips as family trips', () => {
+    const friends: StoredTrip = { ...trip, kind: 'friends' };
+    expect(tripToRows(friends).trip.kind).toBe('friends');
+    expect(rowsToTrip(tripToRows(friends), 'user-a').kind).toBe('friends');
+    const { kind: _kind, ...older } = tripToRows(trip).trip;
+    expect(rowsToTrip({ ...tripToRows(trip), trip: older }, 'user-a').kind).toBeUndefined();
+  });
+
   it('treats a joined trip with no chosen member as having no "me"', () => {
     expect(rowsToTrip({ ...tripToRows(trip), meId: null }, null).meId).toBe('');
     expect(tripToRows({ ...trip, meId: '' }).meId).toBeNull();

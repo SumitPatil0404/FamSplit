@@ -48,7 +48,7 @@ function FamilyLine({ name, people, color }: { name: string; people: number; col
 const SLIDES: { title: string; body: string; picture: () => ReactNode }[] = [
   {
     title: 'One trip, several families',
-    body: 'Add every family on the trip and everyone in them, even children and grandparents who never use the app. Anyone can log what they pay for.',
+    body: 'Add every family on the trip and everyone in them, even children and grandparents who never use the app. Travelling with friends instead? Pick a Friends trip and everyone settles with everyone.',
     picture: () => (
       <>
         <FamilyLine name="Sharma" people={4} color={VIOLET} />

@@ -9,7 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { readDraft, sum, updateDraft, useDraft, type SplitMode } from '@/store/expense-draft';
-import { useTrip } from '@/store/trips';
+import { isFriendsTrip, personGroups, useTrip } from '@/store/trips';
 
 const HINTS: Record<SplitMode, string> = {
   equal: 'Everyone ticked pays the same amount.',
@@ -48,7 +48,7 @@ export default function SplitScreen() {
           onChange={(mode) => updateDraft({ mode })}
           options={[
             { value: 'equal', label: 'Per person' },
-            { value: 'perFamily', label: 'Per family' },
+            ...(isFriendsTrip(trip) ? [] : [{ value: 'perFamily' as const, label: 'Per family' }]),
             { value: 'shares', label: 'Shares' },
             { value: 'exact', label: 'Exact' },
           ]}
@@ -58,12 +58,10 @@ export default function SplitScreen() {
         </ThemedText>
         {draft.mode === 'exact' && <Tally entered={sum(exactAmounts)} total={amount} />}
 
-        {trip.families.map((family) => {
-          const members = membersOf(family.id);
-          const allOn = members.every((member) => memberOn[member.id]);
-          const familyShare = members.reduce((total, member) => total + (preview?.get(member.id) ?? 0), 0);
-
-          if (draft.mode === 'perFamily') {
+        {draft.mode === 'perFamily' &&
+          trip.families.map((family) => {
+            const members = membersOf(family.id);
+            const familyShare = members.reduce((total, member) => total + (preview?.get(member.id) ?? 0), 0);
             return (
               <Pressable
                 key={family.id}
@@ -85,82 +83,94 @@ export default function SplitScreen() {
                 </Card>
               </Pressable>
             );
-          }
+          })}
 
-          return (
-            <Card key={family.id}>
-              <Pressable
-                disabled={draft.mode !== 'equal'}
-                onPress={() =>
-                  updateDraft({
-                    memberOn: { ...memberOn, ...Object.fromEntries(members.map((member) => [member.id, !allOn])) },
-                  })
-                }
-                style={styles.row}>
-                <Avatar name={family.name} color={family.color} size={32} />
-                <ThemedText type="bold" style={styles.grow}>
-                  {family.name} family
-                </ThemedText>
-                {draft.mode === 'equal' && (
-                  <ThemedText type="smallBold" numberOfLines={1} themeColor="primary">
-                    {allOn ? 'Clear' : 'Select all'}
+        {draft.mode !== 'perFamily' &&
+          personGroups(trip).map((group) => {
+            const members = group.members;
+            const allOn = members.every((member) => memberOn[member.id]);
+            return (
+              <Card key={group.id}>
+                <Pressable
+                  disabled={draft.mode !== 'equal'}
+                  onPress={() =>
+                    updateDraft({
+                      memberOn: { ...memberOn, ...Object.fromEntries(members.map((member) => [member.id, !allOn])) },
+                    })
+                  }
+                  style={styles.row}>
+                  {group.title && <Avatar name={group.title} color={group.color} size={32} />}
+                  <ThemedText type="bold" style={styles.grow}>
+                    {group.title ?? 'Everyone'}
                   </ThemedText>
-                )}
-              </Pressable>
-
-              {members.map((member) =>
-                draft.mode === 'equal' ? (
-                  <Pressable
-                    key={member.id}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: memberOn[member.id] }}
-                    onPress={() => updateDraft({ memberOn: { ...memberOn, [member.id]: !memberOn[member.id] } })}
-                    style={[styles.row, styles.memberRow]}>
-                    <Checkbox checked={memberOn[member.id]} />
-                    <ThemedText style={styles.grow}>{member.name}</ThemedText>
-                    <ThemedText type="smallBold" numberOfLines={1} themeColor="textSecondary">
-                      {shareOf(member.id)}
+                  {draft.mode === 'equal' && (
+                    <ThemedText type="smallBold" numberOfLines={1} themeColor="primary">
+                      {allOn ? 'Clear' : 'Select all'}
                     </ThemedText>
-                  </Pressable>
-                ) : draft.mode === 'shares' ? (
-                  <View key={member.id} style={[styles.row, styles.memberRow]}>
-                    <View style={styles.grow}>
-                      <ThemedText>{member.name}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
+                  )}
+                </Pressable>
+
+                {members.map((member) =>
+                  draft.mode === 'equal' ? (
+                    <Pressable
+                      key={member.id}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: memberOn[member.id] }}
+                      onPress={() => updateDraft({ memberOn: { ...memberOn, [member.id]: !memberOn[member.id] } })}
+                      style={[styles.row, styles.memberRow]}>
+                      <Checkbox checked={memberOn[member.id]} />
+                      <ThemedText style={styles.grow}>{member.name}</ThemedText>
+                      <ThemedText type="smallBold" numberOfLines={1} themeColor="textSecondary">
                         {shareOf(member.id)}
                       </ThemedText>
+                    </Pressable>
+                  ) : draft.mode === 'shares' ? (
+                    <View key={member.id} style={[styles.row, styles.memberRow]}>
+                      <View style={styles.grow}>
+                        <ThemedText>{member.name}</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {shareOf(member.id)}
+                        </ThemedText>
+                      </View>
+                      <IconButton
+                        icon="remove"
+                        label={`Smaller share for ${member.name}`}
+                        onPress={() =>
+                          updateDraft({ shares: { ...shares, [member.id]: Math.max(0, shares[member.id] - 0.5) } })
+                        }
+                      />
+                      <ThemedText type="bold" style={styles.shareValue}>
+                        {shares[member.id]}
+                      </ThemedText>
+                      <IconButton
+                        icon="add"
+                        label={`Bigger share for ${member.name}`}
+                        onPress={() =>
+                          updateDraft({ shares: { ...shares, [member.id]: Math.min(5, shares[member.id] + 0.5) } })
+                        }
+                      />
                     </View>
-                    <IconButton
-                      icon="remove"
-                      label={`Smaller share for ${member.name}`}
-                      onPress={() => updateDraft({ shares: { ...shares, [member.id]: Math.max(0, shares[member.id] - 0.5) } })}
-                    />
-                    <ThemedText type="bold" style={styles.shareValue}>
-                      {shares[member.id]}
-                    </ThemedText>
-                    <IconButton
-                      icon="add"
-                      label={`Bigger share for ${member.name}`}
-                      onPress={() => updateDraft({ shares: { ...shares, [member.id]: Math.min(5, shares[member.id] + 0.5) } })}
-                    />
-                  </View>
-                ) : (
-                  <View key={member.id} style={[styles.row, styles.memberRow]}>
-                    <ThemedText style={styles.grow}>{member.name}</ThemedText>
-                    <MoneyInput
-                      label={`Owed by ${member.name}`}
-                      value={exactTexts[member.id] ?? ''}
-                      onChange={(text) => updateDraft({ exactTexts: { ...exactTexts, [member.id]: text } })}
-                    />
-                  </View>
-                ),
-              )}
-            </Card>
-          );
-        })}
+                  ) : (
+                    <View key={member.id} style={[styles.row, styles.memberRow]}>
+                      <ThemedText style={styles.grow}>{member.name}</ThemedText>
+                      <MoneyInput
+                        label={`Owed by ${member.name}`}
+                        value={exactTexts[member.id] ?? ''}
+                        onChange={(text) => updateDraft({ exactTexts: { ...exactTexts, [member.id]: text } })}
+                      />
+                    </View>
+                  ),
+                )}
+              </Card>
+            );
+          })}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderColor: theme.border }]}>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderColor: theme.border },
+        ]}>
         {splitProblem && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
             {splitProblem}

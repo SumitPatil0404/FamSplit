@@ -11,7 +11,7 @@ import { formatPaise, type Transfer } from '@/domain';
 import { shareTripSummary } from '@/export/share';
 import { useTheme } from '@/hooks/use-theme';
 import type { TripSummary } from '@/store/summary';
-import { addPayment, canFinalize, finalizeTrip, type StoredTrip } from '@/store/trips';
+import { addPayment, canFinalize, finalizeTrip, isFriendsTrip, type StoredTrip } from '@/store/trips';
 import { isShared, sendReminder, useSync } from '@/sync/sync';
 
 function lookups(trip: StoredTrip) {
@@ -171,24 +171,24 @@ function Step({ number, title, subtitle, done }: { number: number; title: string
 }
 
 export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
-  const theme = useTheme();
   const sync = useSync();
   const [exporting, setExporting] = useState(false);
-  const { name } = lookups(trip);
-  const { betweenFamilies, withinFamily, familyNets } = summary.settlement;
-
-  // A family settles internally only after its head has squared up with the other families.
-  const internal = trip.families
-    .map((family) => ({
-      family,
-      transfers: withinFamily.get(family.id) ?? [],
-      locked: (familyNets.get(family.id) ?? 0) !== 0,
-    }))
-    .filter(({ transfers }) => transfers.length > 0);
+  const { betweenFamilies } = summary.settlement;
   const headsDone = betweenFamilies.length === 0;
+  const friends = isFriendsTrip(trip);
 
   if (trip.expenses.length === 0 && trip.payments.length === 0) {
-    return <EmptyState emoji="🤝" title="Nothing to settle yet" body="Once expenses are added, the payments between family heads show up here." />;
+    return (
+      <EmptyState
+        emoji="🤝"
+        title="Nothing to settle yet"
+        body={
+          friends
+            ? 'Once expenses are added, who pays whom shows up here.'
+            : 'Once expenses are added, the payments between family heads show up here.'
+        }
+      />
+    );
   }
 
   const confirmFinalize = () =>
@@ -224,7 +224,9 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
           <ThemedText type="small" themeColor="textSecondary">
             {canFinalize(trip, sync.session?.user.id)
               ? 'Finalise it to lock the expenses, so these amounts stay put while everyone pays.'
-              : 'The trip’s creator or a family head can finalise it, which locks the expenses while everyone pays.'}
+              : friends
+                ? 'The trip’s creator can finalise it, which locks the expenses while everyone pays.'
+                : 'The trip’s creator or a family head can finalise it, which locks the expenses while everyone pays.'}
           </ThemedText>
           {canFinalize(trip, sync.session?.user.id) && (
             <Button label="Finalise trip" icon="lock" variant="soft" compact onPress={confirmFinalize} style={styles.start} />
@@ -232,6 +234,64 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
         </Card>
       )}
 
+      {friends ? (
+        <>
+          <View>
+            <ThemedText type="heading">Who pays whom</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              The fewest payments that square everyone up
+            </ThemedText>
+          </View>
+          {headsDone ? (
+            <Card>
+              <ThemedText type="bold">🎉 Everyone is settled</ThemedText>
+            </Card>
+          ) : (
+            betweenFamilies.map((transfer) => (
+              <Card key={`${transfer.fromMemberId}-${transfer.toMemberId}`}>
+                <TransferRow trip={trip} transfer={transfer} signedIn={sync.session !== null} />
+              </Card>
+            ))
+          )}
+        </>
+      ) : (
+        <FamilySteps trip={trip} summary={summary} />
+      )}
+
+      <Button
+        label={exporting ? 'Making the PDF…' : 'Share summary as PDF'}
+        icon="pdf"
+        variant="soft"
+        disabled={exporting}
+        onPress={() => void exportPdf()}
+        style={styles.section}
+      />
+      {trip.payments.length > 0 && (
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.note}>
+          Payments marked as paid are listed under Expenses, where they can be undone.
+        </ThemedText>
+      )}
+    </View>
+  );
+}
+
+/** Heads settle between families first, then each family inside; a family's step stays locked until its head is square. */
+function FamilySteps({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
+  const theme = useTheme();
+  const sync = useSync();
+  const { name } = lookups(trip);
+  const { betweenFamilies, withinFamily, familyNets } = summary.settlement;
+  const internal = trip.families
+    .map((family) => ({
+      family,
+      transfers: withinFamily.get(family.id) ?? [],
+      locked: (familyNets.get(family.id) ?? 0) !== 0,
+    }))
+    .filter(({ transfers }) => transfers.length > 0);
+  const headsDone = betweenFamilies.length === 0;
+
+  return (
+    <>
       <Step number={1} title="Between families" subtitle="Only the family heads pay each other" done={headsDone} />
       {headsDone ? (
         <Card>
@@ -285,21 +345,7 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
           </View>
         </Card>
       ))}
-
-      <Button
-        label={exporting ? 'Making the PDF…' : 'Share summary as PDF'}
-        icon="pdf"
-        variant="soft"
-        disabled={exporting}
-        onPress={() => void exportPdf()}
-        style={styles.section}
-      />
-      {trip.payments.length > 0 && (
-        <ThemedText type="caption" themeColor="textSecondary" style={styles.note}>
-          Payments marked as paid are listed under Expenses, where they can be undone.
-        </ThemedText>
-      )}
-    </View>
+    </>
   );
 }
 

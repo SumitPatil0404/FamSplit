@@ -47,6 +47,10 @@ export function describeActivity(entry: ActivityEntry, trip: StoredTrip): Activi
       return before.name !== after.name ? line('changed', `renamed the trip to “${text(after.name)}”`) : null;
 
     case 'family':
+      // On a friends trip each person is a family of one, and the person's own line says it all.
+      if (trip.kind === 'friends') {
+        return null;
+      }
       if (entry.action === 'added') {
         return line('added', `added the ${text(row.name)} family`);
       }
@@ -61,7 +65,7 @@ export function describeActivity(entry: ActivityEntry, trip: StoredTrip): Activi
         : null;
 
     case 'member': {
-      const family = familyName(row.family_id);
+      const family = trip.kind === 'friends' ? undefined : familyName(row.family_id);
       if (entry.action === 'added') {
         return line('added', `added ${text(row.name)}${family ? ` to the ${family} family` : ''}`);
       }
