@@ -13,7 +13,8 @@ import { Button, Card, EmptyState, Fab, IconButton, Segmented } from '@/componen
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDay, plural, summarizeTrip, type TripSummary } from '@/store/summary';
+import { plural, useT } from '@/i18n';
+import { formatDay, summarizeTrip, type TripSummary } from '@/store/summary';
 import { canFinalize, isFriendsTrip, reopenTrip, useTrip, type StoredTrip } from '@/store/trips';
 import { usePullToSync, useSync } from '@/sync/sync';
 
@@ -21,25 +22,39 @@ type Tab = 'expenses' | 'families' | 'settle';
 
 function Hero({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
   const theme = useTheme();
+  const t = useT();
   const { myFamily, myFamilyNet, totalSpent } = summary;
   const friends = isFriendsTrip(trip);
-  const who = friends ? 'You' : myFamily ? `${myFamily.name} family` : 'Your family';
+  const amount = formatPaise(Math.abs(myFamilyNet));
+  const name = myFamily?.name ?? '';
   const status = summary.incomplete
-    ? 'Still syncing this trip…'
+    ? t('Still syncing this trip…')
     : totalSpent === 0
-      ? 'Add an expense to get started'
+      ? t('Add an expense to get started')
       : friends && !trip.meId
-        ? 'Tell us which one is you'
-        : myFamilyNet > 0
-          ? `${who} ${friends ? 'get' : 'gets'} back ${formatPaise(myFamilyNet)}`
-          : myFamilyNet < 0
-            ? `${who} ${friends ? 'owe' : 'owes'} ${formatPaise(-myFamilyNet)}`
-            : `${who} ${friends ? 'are' : 'is'} all settled`;
+        ? t('Tell us which one is you')
+        : friends
+          ? myFamilyNet > 0
+            ? t('You get back {amount}', { amount })
+            : myFamilyNet < 0
+              ? t('You owe {amount}', { amount })
+              : t('You are all settled')
+          : !myFamily
+            ? myFamilyNet > 0
+              ? t('Your family gets back {amount}', { amount })
+              : myFamilyNet < 0
+                ? t('Your family owes {amount}', { amount })
+                : t('Your family is settled')
+            : myFamilyNet > 0
+              ? t('{name} family gets back {amount}', { name, amount })
+              : myFamilyNet < 0
+                ? t('{name} family owes {amount}', { name, amount })
+                : t('{name} family is all settled', { name });
 
   return (
-    <View style={[styles.hero, { backgroundColor: theme.primary }]}>
+    <View style={[styles.hero, { backgroundColor: theme.primaryFill }]}>
       <ThemedText type="caption" style={styles.heroMuted}>
-        TOTAL SPENT
+        {t('TOTAL SPENT')}
       </ThemedText>
       <ThemedText type="amount" style={{ color: theme.onPrimary }}>
         {formatPaise(totalSpent)}
@@ -50,8 +65,9 @@ function Hero({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
         </ThemedText>
       </View>
       <ThemedText type="caption" style={styles.heroMuted}>
-        {friends ? 'Friends' : plural(trip.families.length, 'family', 'families')} ·{' '}
-        {plural(trip.members.length, 'person', 'people')} · {plural(trip.expenses.length, 'expense', 'expenses')}
+        {friends ? t('Friends') : plural(t, trip.families.length, '{count} family', '{count} families')} ·{' '}
+        {plural(t, trip.members.length, '{count} person', '{count} people')} ·{' '}
+        {plural(t, trip.expenses.length, '{count} expense', '{count} expenses')}
       </ThemedText>
     </View>
   );
@@ -63,11 +79,12 @@ export default function TripScreen() {
   const insets = useSafeAreaInsets();
   const trip = useTrip(tripId);
   const sync = useSync();
+  const t = useT();
   const pull = usePullToSync();
   const [tab, setTab] = useState<Tab>('expenses');
 
   if (!trip) {
-    return <EmptyState emoji="🤔" title="Trip not found" body="It may have been deleted from this phone." />;
+    return <EmptyState emoji="🤔" title={t('Trip not found')} body={t('It may have been deleted from this phone.')} />;
   }
 
   const summary = summarizeTrip(trip);
@@ -81,13 +98,14 @@ export default function TripScreen() {
   const chooseMe = () => router.push({ pathname: '/trip/[tripId]/who', params: { tripId } });
   const openActivity = () => router.push({ pathname: '/trip/[tripId]/activity', params: { tripId } });
   const openRename = () => router.push({ pathname: '/trip/[tripId]/rename', params: { tripId } });
+  const openSpending = () => router.push({ pathname: '/trip/[tripId]/spending', params: { tripId } });
   const finalised = Boolean(trip.finalizedAt);
   const confirmReopen = () =>
     confirmDialog({
       icon: 'lockOpen',
-      title: 'Reopen this trip?',
-      message: 'Expenses can be added and changed again, which may change what everyone owes.',
-      confirmLabel: 'Reopen trip',
+      title: t('Reopen this trip?'),
+      message: t('Expenses can be added and changed again, which may change what everyone owes.'),
+      confirmLabel: t('Reopen trip'),
       onConfirm: () => reopenTrip(trip.id),
     });
 
@@ -98,8 +116,9 @@ export default function TripScreen() {
           title: trip.name,
           headerRight: () => (
             <View style={styles.headerButtons}>
-              <IconButton icon="edit" label="Rename trip" onPress={openRename} />
-              <IconButton icon="history" label="Activity" onPress={openActivity} />
+              <IconButton icon="edit" label={t('Rename trip')} onPress={openRename} />
+              <IconButton icon="chart" label={t('Spending by category')} onPress={openSpending} />
+              <IconButton icon="history" label={t('Activity')} onPress={openActivity} />
             </View>
           ),
         }}
@@ -113,33 +132,33 @@ export default function TripScreen() {
             <View style={styles.row}>
               <Icon name="lock" size={20} />
               <ThemedText type="bold" style={styles.grow}>
-                Finalised on {formatDay(trip.finalizedAt)}
+                {t('Finalised on {date}', { date: formatDay(trip.finalizedAt, t) })}
               </ThemedText>
             </View>
             <ThemedText type="small" themeColor="textSecondary">
-              Expenses are locked. Payments can still be marked as paid under Settle up.
+              {t('Expenses are locked. Payments can still be marked as paid under Settle up.')}
             </ThemedText>
             {canFinalize(trip, sync.session?.user.id) && (
-              <Button label="Reopen trip" icon="lockOpen" variant="soft" compact onPress={confirmReopen} style={styles.start} />
+              <Button label={t('Reopen trip')} icon="lockOpen" variant="soft" compact onPress={confirmReopen} style={styles.start} />
             )}
           </Card>
         )}
         {!trip.meId && (
           <Card>
-            <ThemedText type="bold">Which one is you?</ThemedText>
+            <ThemedText type="bold">{t('Which one is you?')}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {friends ? 'Pick yourself to see what you owe or get back.' : 'Pick yourself to see what your family owes or gets back.'}
+              {friends ? t('Pick yourself to see what you owe or get back.') : t('Pick yourself to see what your family owes or gets back.')}
             </ThemedText>
-            <Button label="Choose" variant="soft" compact onPress={chooseMe} style={styles.start} />
+            <Button label={t('Choose')} variant="soft" compact onPress={chooseMe} style={styles.start} />
           </Card>
         )}
         <Segmented
           value={tab}
           onChange={setTab}
           options={[
-            { value: 'expenses', label: 'Expenses' },
-            { value: 'families', label: friends ? 'People' : 'Families' },
-            { value: 'settle', label: 'Settle up' },
+            { value: 'expenses', label: t('Expenses') },
+            { value: 'families', label: friends ? t('People') : t('Families') },
+            { value: 'settle', label: t('Settle up') },
           ]}
         />
         {tab === 'expenses' && (
@@ -168,7 +187,7 @@ export default function TripScreen() {
         {tab === 'settle' && <SettleTab trip={trip} summary={summary} />}
       </ScrollView>
       {tab !== 'settle' && !finalised && (
-        <Fab label="Add expense" icon="add" bottom={insets.bottom} onPress={addExpense} />
+        <Fab label={t('Add expense')} icon="add" bottom={insets.bottom} onPress={addExpense} />
       )}
     </View>
   );

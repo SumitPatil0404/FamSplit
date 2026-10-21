@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, EmptyState, Field, IconButton } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import {
   deleteFamily,
   isFamilyUsed,
@@ -25,6 +26,7 @@ type Row = { key: string; id?: string; name: string; upiId: string; showUpi: boo
 const looksLikeUpiId = (value: string) => /^[\w.-]{2,}@[a-zA-Z][\w.-]+$/.test(value);
 
 function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFamily }) {
+  const t = useT();
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -52,15 +54,15 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
   const kept = rows.filter((row) => row.name.trim() !== '');
   const problem =
     name.trim() === ''
-      ? 'Give the family a name'
+      ? t('Give the family a name')
       : rows.some((row) => row.id && row.name.trim() === '')
-        ? 'Every existing member needs a name'
+        ? t('Every existing member needs a name')
         : kept.length === 0
-          ? 'Add at least one person'
+          ? t('Add at least one person')
           : !kept.some((row) => row.key === headKey)
-            ? 'Pick a head who has a name'
+            ? t('Pick a head who has a name')
             : kept.some((row) => row.upiId.trim() !== '' && !looksLikeUpiId(row.upiId.trim()))
-              ? 'A UPI ID looks like name@bank'
+              ? t('A UPI ID looks like name@bank')
               : null;
 
   const canRemove = (row: Row) =>
@@ -98,9 +100,9 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
     confirmDialog({
       icon: 'delete',
       tone: 'danger',
-      title: `Remove the ${existing.name} family?`,
-      message: 'They are not part of any expense, so nothing else changes.',
-      confirmLabel: 'Remove family',
+      title: t('Remove the {name} family?', { name: existing.name }),
+      message: t('They are not part of any expense, so nothing else changes.'),
+      confirmLabel: t('Remove family'),
       onConfirm: () => {
         deleteFamily(trip.id, existing.id);
         router.back();
@@ -112,10 +114,10 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
 
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
-      <Stack.Screen options={{ title: existing ? 'Edit family' : 'Add family' }} />
+      <Stack.Screen options={{ title: existing ? t('Edit family') : t('Add family') }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Field
-          label="Family name"
+          label={t('Family name')}
           placeholder="Patel"
           value={name}
           onChangeText={setName}
@@ -125,12 +127,12 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
 
         <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            People
+            {t('People')}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {finalised
-              ? 'The trip is finalised, so people cannot be changed. UPI IDs can still be added so others can pay.'
-              : 'Tap the star to choose the head. The head is the one who settles with the other families. Children and grandparents can be added even if they never use the app.'}
+              ? t('The trip is finalised, so people cannot be changed. UPI IDs can still be added so others can pay.')
+              : t('Tap the star to choose the head. The head is the one who settles with the other families. Children and grandparents can be added even if they never use the app.')}
           </ThemedText>
         </View>
 
@@ -141,7 +143,7 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
               <View style={styles.row}>
                 <Pressable
                   accessibilityRole="radio"
-                  accessibilityLabel={`Make ${row.name || 'this person'} the head`}
+                  accessibilityLabel={t('Make {name} the head', { name: row.name || t('this person') })}
                   accessibilityState={{ selected: isHead }}
                   disabled={finalised}
                   hitSlop={8}
@@ -152,7 +154,7 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
                 <TextInput
                   value={row.name}
                   onChangeText={(text) => change(row.key, { name: text })}
-                  placeholder={isHead ? 'Name of the head' : 'Name'}
+                  placeholder={isHead ? t('Name of the head') : t('Name')}
                   placeholderTextColor={theme.textSecondary}
                   autoFocus={row.key === focusKey}
                   editable={!finalised}
@@ -161,17 +163,17 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
                 {canRemove(row) && (
                   <IconButton
                     icon="close"
-                    label={`Remove ${row.name || 'this person'}`}
+                    label={t('Remove {name}', { name: row.name || t('this person') })}
                     onPress={() => setRows(rows.filter((other) => other.key !== row.key))}
                   />
                 )}
               </View>
               {row.showUpi ? (
                 <TextInput
-                  accessibilityLabel={`UPI ID for ${row.name || 'this person'}`}
+                  accessibilityLabel={t('UPI ID for {name}', { name: row.name || t('this person') })}
                   value={row.upiId}
                   onChangeText={(text) => change(row.key, { upiId: text })}
-                  placeholder="UPI ID, like name@bank"
+                  placeholder={t('UPI ID, like name@bank')}
                   placeholderTextColor={theme.textSecondary}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -193,14 +195,14 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
           );
         })}
 
-        {!finalised && <Button label="Add a person" icon="personAdd" variant="soft" onPress={addRow} />}
+        {!finalised && <Button label={t('Add a person')} icon="personAdd" variant="soft" onPress={addRow} />}
 
         {existing && !finalised && (
           <ThemedText type="caption" themeColor="textSecondary">
-            People who are part of an expense or payment cannot be removed.
+            {t('People who are part of an expense or payment cannot be removed.')}
           </ThemedText>
         )}
-        {canDelete && <Button label="Remove this family" icon="delete" variant="danger" onPress={confirmDelete} />}
+        {canDelete && <Button label={t('Remove this family')} icon="delete" variant="danger" onPress={confirmDelete} />}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.two, backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -209,18 +211,19 @@ function FamilyForm({ trip, existing }: { trip: StoredTrip; existing?: StoredFam
             {problem}
           </ThemedText>
         )}
-        <Button label={existing ? 'Save changes' : 'Add family'} icon="check" onPress={save} disabled={problem !== null} />
+        <Button label={existing ? t('Save changes') : t('Add family')} icon="check" onPress={save} disabled={problem !== null} />
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 export default function FamilyScreen() {
+  const t = useT();
   const { tripId, familyId } = useLocalSearchParams<{ tripId: string; familyId?: string }>();
   const trip = useTrip(tripId);
 
   if (!trip) {
-    return <EmptyState emoji="🤔" title="Trip not found" body="It may have been deleted from this phone." />;
+    return <EmptyState emoji="🤔" title={t('Trip not found')} body={t('It may have been deleted from this phone.')} />;
   }
   return <FamilyForm trip={trip} existing={trip.families.find((family) => family.id === familyId)} />;
 }

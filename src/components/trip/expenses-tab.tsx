@@ -8,6 +8,7 @@ import { Button, Card, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { expenseShares, formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { categoryOf } from '@/store/categories';
 import { formatDay } from '@/store/summary';
 import { deletePayment, isFriendsTrip, type StoredExpense, type StoredPayment, type StoredTrip } from '@/store/trips';
@@ -22,9 +23,10 @@ function sharesOf(expense: StoredExpense, trip: StoredTrip): Map<string, number>
 }
 
 function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpense }) {
+  const t = useT();
   const router = useRouter();
 
-  const nameOf = (memberId: string) => trip.members.find((member) => member.id === memberId)?.name ?? 'Someone';
+  const nameOf = (memberId: string) => trip.members.find((member) => member.id === memberId)?.name ?? t('Someone');
   const payers = Object.keys(expense.paidBy).filter((memberId) => expense.paidBy[memberId] > 0);
   const paidBy = payers.length > 1 ? `${nameOf(payers[0])} +${payers.length - 1}` : nameOf(payers[0]);
 
@@ -56,18 +58,18 @@ function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpens
         <View style={styles.grow}>
           <ThemedText type="bold">{expense.description}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {formatDay(expense.date)} · {paidBy} paid {formatPaise(expense.amount)}
+            {formatDay(expense.date, t)} · {t('{name} paid {amount}', { name: paidBy, amount: formatPaise(expense.amount) })}
           </ThemedText>
         </View>
         <View style={styles.effect}>
           {!involved || effect === 0 ? (
             <ThemedText type="caption" numberOfLines={1} themeColor="textSecondary">
-              {involved ? 'even' : 'not involved'}
+              {involved ? t('even') : t('not involved')}
             </ThemedText>
           ) : (
             <>
               <ThemedText type="caption" numberOfLines={1} themeColor={effect > 0 ? 'positive' : 'negative'}>
-                {effect > 0 ? 'you lent' : 'you borrowed'}
+                {effect > 0 ? t('you lent') : t('you borrowed')}
               </ThemedText>
               <ThemedText type="smallBold" numberOfLines={1} themeColor={effect > 0 ? 'positive' : 'negative'}>
                 {formatPaise(Math.abs(effect))}
@@ -82,26 +84,27 @@ function ExpenseRow({ trip, expense }: { trip: StoredTrip; expense: StoredExpens
 
 /** A settlement payment, shown in the same list so the trip reads as one timeline. */
 function PaymentRow({ trip, payment }: { trip: StoredTrip; payment: StoredPayment }) {
+  const t = useT();
   const theme = useTheme();
   const from = trip.members.find((member) => member.id === payment.fromMemberId);
   const to = trip.members.find((member) => member.id === payment.toMemberId);
-  const fromName = from?.name ?? 'Someone';
-  const toName = to?.name ?? 'someone';
+  const fromName = from?.name ?? t('Someone');
+  const toName = to?.name ?? t('someone');
   const family = trip.families.find((candidate) => candidate.id === from?.familyId);
   const where = isFriendsTrip(trip)
-    ? 'Settled up'
+    ? t('Settled up')
     : from && to && from.familyId === to.familyId
-      ? `Inside the ${family?.name ?? ''} family`
-      : 'Between families';
+      ? t('Inside the {name} family', { name: family?.name ?? '' })
+      : t('Between families');
 
   const confirmUndo = () =>
     confirmDialog({
       icon: 'undo',
       tone: 'danger',
-      title: 'Undo this payment?',
-      message: `${fromName} will owe ${toName} ${formatPaise(payment.amount)} again.`,
-      confirmLabel: 'Undo payment',
-      cancelLabel: 'Keep it',
+      title: t('Undo this payment?'),
+      message: t('{from} will owe {to} {amount} again.', { from: fromName, to: toName, amount: formatPaise(payment.amount) }),
+      confirmLabel: t('Undo payment'),
+      cancelLabel: t('Keep it'),
       onConfirm: () => deletePayment(trip.id, payment.id),
     });
 
@@ -115,15 +118,15 @@ function PaymentRow({ trip, payment }: { trip: StoredTrip; payment: StoredPaymen
         </View>
         <View style={styles.grow}>
           <ThemedText type="bold">
-            {fromName} paid {toName}
+            {t('{from} paid {to}', { from: fromName, to: toName })}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {formatDay(payment.date)} · {where}
+            {formatDay(payment.date, t)} · {where}
           </ThemedText>
         </View>
         <View style={styles.effect}>
           <ThemedText type="caption" numberOfLines={1} themeColor="positive">
-            settled
+            {t('settled')}
           </ThemedText>
           <ThemedText type="smallBold" numberOfLines={1} themeColor="positive">
             {formatPaise(payment.amount)}
@@ -143,8 +146,9 @@ type Props = {
 };
 
 export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Props) {
+  const t = useT();
   if (finalised && trip.expenses.length === 0 && trip.payments.length === 0) {
-    return <EmptyState emoji="🔒" title="No expenses" body="This trip was finalised without any expenses. Reopen it to add some." />;
+    return <EmptyState emoji="🔒" title={t('No expenses')} body={t('This trip was finalised without any expenses. Reopen it to add some.')} />;
   }
 
   const friends = isFriendsTrip(trip);
@@ -152,14 +156,14 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
     return (
       <EmptyState
         emoji="🙌"
-        title="Who is coming along?"
+        title={t('Who is coming along?')}
         body={
           friends
-            ? 'Add the people on this trip, or share the invite code under People. Then start adding expenses.'
+            ? t('Add the people on this trip, or share the invite code under People. Then start adding expenses.')
             : 'Add the other families on this trip, then start adding expenses.'
         }>
         <Button
-          label={friends ? 'Add people' : 'Add a family'}
+          label={friends ? t('Add people') : t('Add a family')}
           icon={friends ? 'personAdd' : 'groupAdd'}
           onPress={onAddFamily}
           style={styles.cta}
@@ -172,9 +176,9 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
     return (
       <EmptyState
         emoji="🧾"
-        title="No expenses yet"
-        body={friends ? 'Add the first thing someone paid for.' : 'Add the first thing someone paid for. Anyone in any family can be the payer.'}>
-        <Button label="Add an expense" icon="add" onPress={onAddExpense} style={styles.cta} />
+        title={t('No expenses yet')}
+        body={friends ? t('Add the first thing someone paid for.') : t('Add the first thing someone paid for. Anyone in any family can be the payer.')}>
+        <Button label={t('Add an expense')} icon="add" onPress={onAddExpense} style={styles.cta} />
       </EmptyState>
     );
   }
@@ -188,7 +192,7 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
     <View style={styles.list}>
       {!friends && (
         <ThemedText type="caption" themeColor="textSecondary">
-          “You” means your whole family on this trip
+          {t('“You” means your whole family on this trip')}
         </ThemedText>
       )}
       {timeline.map((entry) =>

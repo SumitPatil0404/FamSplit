@@ -1,191 +1,176 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Share, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
-import { UpiPaySheet } from '@/components/trip/upi-pay';
+import { lookups, NavRow, TransferRow } from '@/components/trip/settle-parts';
 import { Avatar, Button, Card, EmptyState } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
-import { formatPaise, type Transfer } from '@/domain';
+import { Radius, Spacing } from '@/constants/theme';
 import { shareTripSummary } from '@/export/share';
 import { useTheme } from '@/hooks/use-theme';
+import { plural, useT } from '@/i18n';
+import { familySteps, myTransfers } from '@/store/settle-plan';
 import type { TripSummary } from '@/store/summary';
-import { addPayment, canFinalize, finalizeTrip, isFriendsTrip, type StoredTrip } from '@/store/trips';
-import { isShared, sendReminder, useSync } from '@/sync/sync';
+import { canFinalize, finalizeTrip, isFriendsTrip, type StoredTrip } from '@/store/trips';
+import { useSync } from '@/sync/sync';
 
-function lookups(trip: StoredTrip) {
-  const member = (memberId: string) => trip.members.find((candidate) => candidate.id === memberId);
-  const familyOf = (memberId: string) => trip.families.find((family) => family.id === member(memberId)?.familyId);
-  return {
-    member,
-    name: (memberId: string) => member(memberId)?.name ?? 'Someone',
-    familyName: (memberId: string) => familyOf(memberId)?.name ?? '',
-    color: (memberId: string) => familyOf(memberId)?.color ?? '#888888',
-  };
-}
-
-type TransferRowProps = {
-  trip: StoredTrip;
-  transfer: Transfer;
-  betweenFamilies?: boolean;
-  /** Shown for information only; it cannot be paid or marked as paid yet. */
-  locked?: boolean;
-  signedIn: boolean;
-};
-
-function TransferRow({ trip, transfer, betweenFamilies, locked, signedIn }: TransferRowProps) {
-  const { member, name, familyName, color } = lookups(trip);
-  const from = name(transfer.fromMemberId);
-  const to = name(transfer.toMemberId);
-  const amount = formatPaise(transfer.amount);
-  const payeeUpi = member(transfer.toMemberId)?.upiId;
-  const [paying, setPaying] = useState(false);
-
-  // "Mine" means anyone in the family of whoever is using this phone.
-  const myFamilyId = member(trip.meId)?.familyId;
-  const iPay = myFamilyId !== undefined && member(transfer.fromMemberId)?.familyId === myFamilyId;
-
-  const markPaid = () =>
-    confirmDialog({
-      icon: 'check',
-      title: 'Mark as paid?',
-      message: `${from} paid ${to} ${amount}.`,
-      confirmLabel: 'Yes, paid',
-      cancelLabel: 'Not yet',
-      onConfirm: () =>
-        addPayment(trip.id, {
-          fromMemberId: transfer.fromMemberId,
-          toMemberId: transfer.toMemberId,
-          amount: transfer.amount,
-        }),
-    });
-
-  const sendMessage = () =>
-    Share.share({
-      message:
-        `Hi ${from}, a reminder from our “${trip.name}” trip on FamSplit: ` +
-        (betweenFamilies
-          ? `the ${familyName(transfer.fromMemberId)} family owes the ${familyName(transfer.toMemberId)} family ${amount}. Please pay ${to}.`
-          : `you owe ${to} ${amount}.`) +
-        (payeeUpi ? ` UPI: ${payeeUpi}` : ''),
-    });
-
-  // A reminder is a push notification to their phone. Only someone who does not use the app, or
-  // a trip that is not shared, falls back to a message through another app.
-  const remind = async () => {
-    if (!signedIn || !isShared(trip.id)) {
-      void sendMessage();
-      return;
-    }
-    try {
-      const phones = await sendReminder(trip.id, transfer);
-      if (phones > 0) {
-        confirmDialog({
-          icon: 'bell',
-          title: 'Reminder sent',
-          message: `${from} gets a notification that ${amount} is due.`,
-          confirmLabel: 'OK',
-          hideCancel: true,
-        });
-      } else {
-        confirmDialog({
-          icon: 'bell',
-          title: `${from} is not on FamSplit yet`,
-          message: 'There is no phone to notify. You can send them a message instead.',
-          confirmLabel: 'Send a message',
-          onConfirm: () => void sendMessage(),
-        });
-      }
-    } catch (error) {
-      confirmDialog({
-        icon: 'bell',
-        title: 'Reminder not sent',
-        message: error instanceof Error ? error.message : 'Something went wrong.',
-        confirmLabel: 'OK',
-        hideCancel: true,
-      });
-    }
-  };
-
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <View style={styles.transfer}>
-      <View style={styles.row}>
-        <Avatar name={betweenFamilies ? familyName(transfer.fromMemberId) : from} color={color(transfer.fromMemberId)} size={36} />
-        <View style={styles.grow}>
-          <ThemedText type="bold">
-            {from} pays {to}
-          </ThemedText>
-          {betweenFamilies && (
-            <ThemedText type="small" themeColor="textSecondary">
-              {familyName(transfer.fromMemberId)} family → {familyName(transfer.toMemberId)} family
-            </ThemedText>
-          )}
-        </View>
-        <ThemedText type="heading" numberOfLines={1}>
-          {amount}
+    <View style={styles.sectionTitle}>
+      <ThemedText type="heading">{title}</ThemedText>
+      {subtitle && (
+        <ThemedText type="small" themeColor="textSecondary">
+          {subtitle}
         </ThemedText>
-      </View>
-      {!locked && (
-        <View style={styles.actions}>
-          {iPay && payeeUpi && <Button label="Pay with UPI" icon="rupee" compact onPress={() => setPaying(true)} />}
-          {!iPay && <Button label="Remind" icon="bell" variant="soft" compact onPress={() => void remind()} />}
-          <Button label="Mark as paid" icon="check" variant="soft" compact onPress={markPaid} />
-        </View>
-      )}
-      {paying && payeeUpi && (
-        <UpiPaySheet
-          payee={to}
-          upiId={payeeUpi}
-          amount={transfer.amount}
-          note={`FamSplit: ${trip.name}`}
-          onClose={() => setPaying(false)}
-          onMarkPaid={markPaid}
-        />
       )}
     </View>
   );
 }
 
-function Step({ number, title, subtitle, done }: { number: number; title: string; subtitle: string; done: boolean }) {
-  const theme = useTheme();
+/** The payments between families this phone's owner makes or receives, before anything else. */
+function YourPart({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
+  const t = useT();
+  const sync = useSync();
+  const mine = myTransfers(trip, summary.settlement);
+  const myFamily = trip.families.find((family) =>
+    trip.members.some((member) => member.id === trip.meId && member.familyId === family.id),
+  );
+  const isHead = myFamily?.headId === trip.meId;
+
   return (
-    <View style={styles.row}>
-      <View style={[styles.step, { backgroundColor: done ? theme.positiveSoft : theme.primarySoft }]}>
-        {done ? (
-          <Icon name="check" size={18} color={theme.positive} />
-        ) : (
-          <ThemedText type="smallBold" allowFontScaling={false} themeColor="primary">
-            {number}
+    <>
+      <SectionTitle title={t('Your part')} />
+      {!trip.meId ? (
+        <Card>
+          <ThemedText type="small" themeColor="textSecondary">
+            {t('Tell us which one is you under Families to see what you pay or collect.')}
           </ThemedText>
-        )}
-      </View>
-      <View style={styles.grow}>
-        <ThemedText type="heading">{title}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {subtitle}
-        </ThemedText>
-      </View>
-    </View>
+        </Card>
+      ) : mine.length === 0 ? (
+        <Card style={styles.card}>
+          <ThemedText type="bold">
+            {isHead ? `🎉 ${t('Nothing for you to pay or collect')}` : t('Your family head settles with the other families')}
+          </ThemedText>
+          {myFamily && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('What you pay or get inside your family is under {name} family below.', { name: myFamily.name })}
+            </ThemedText>
+          )}
+        </Card>
+      ) : (
+        mine.map((transfer) => (
+          <Card key={`${transfer.fromMemberId}-${transfer.toMemberId}`}>
+            <TransferRow trip={trip} transfer={transfer} betweenFamilies signedIn={sync.session !== null} />
+          </Card>
+        ))
+      )}
+    </>
+  );
+}
+
+/** Families: what is left between the heads, and inside each family, each opening a page of its own. */
+function FamilyOverview({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
+  const router = useRouter();
+  const theme = useTheme();
+  const t = useT();
+  const { name } = lookups(trip, t);
+  const between = summary.settlement.betweenFamilies;
+  const steps = familySteps(trip, summary.settlement);
+
+  return (
+    <>
+      <YourPart trip={trip} summary={summary} />
+
+      <SectionTitle title={t('Everyone')} subtitle={t('Heads settle between families first, then each family inside.')} />
+      <NavRow
+        leading={
+          <View style={[styles.tile, { backgroundColor: theme.primarySoft }]}>
+            <Icon name="handshake" size={22} color={theme.primary} />
+          </View>
+        }
+        title={t('Between families')}
+        subtitle={
+          between.length === 0
+            ? t('All family heads are square')
+            : plural(t, between.length, '{count} payment between the heads', '{count} payments between the heads')
+        }
+        status={
+          between.length === 0
+            ? { tone: 'done', label: t('Done') }
+            : { tone: 'todo', label: t('{count} left', { count: between.length }) }
+        }
+        onPress={() => router.push({ pathname: '/trip/[tripId]/settle-between', params: { tripId: trip.id } })}
+      />
+      {steps.map(({ family, transfers, locked }) => (
+        <NavRow
+          key={family.id}
+          leading={<Avatar name={family.name} color={family.color} size={44} />}
+          title={t('{name} family', { name: family.name })}
+          subtitle={
+            transfers.length === 0
+              ? t('Head: {name} · nothing to settle inside', { name: name(family.headId) })
+              : t('Head: {name} · {payments} inside', {
+                  name: name(family.headId),
+                  payments: plural(t, transfers.length, '{count} payment', '{count} payments'),
+                })
+          }
+          status={
+            transfers.length === 0
+              ? { tone: 'done', label: t('Done') }
+              : locked
+                ? { tone: 'waiting', label: t('Waiting for {name}', { name: name(family.headId) }) }
+                : { tone: 'todo', label: t('{count} left', { count: transfers.length }) }
+          }
+          onPress={() =>
+            router.push({ pathname: '/trip/[tripId]/settle-family', params: { tripId: trip.id, familyId: family.id } })
+          }
+        />
+      ))}
+    </>
+  );
+}
+
+/** Friends: one list of who pays whom. */
+function FriendsList({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
+  const t = useT();
+  const sync = useSync();
+  const transfers = summary.settlement.betweenFamilies;
+  return (
+    <>
+      <SectionTitle title={t('Who pays whom')} subtitle={t('The fewest payments that square everyone up')} />
+      {transfers.length === 0 ? (
+        <Card>
+          <ThemedText type="bold">🎉 {t('Everyone is settled')}</ThemedText>
+        </Card>
+      ) : (
+        transfers.map((transfer) => (
+          <Card key={`${transfer.fromMemberId}-${transfer.toMemberId}`}>
+            <TransferRow trip={trip} transfer={transfer} signedIn={sync.session !== null} />
+          </Card>
+        ))
+      )}
+    </>
   );
 }
 
 export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
   const sync = useSync();
+  const t = useT();
   const [exporting, setExporting] = useState(false);
-  const { betweenFamilies } = summary.settlement;
-  const headsDone = betweenFamilies.length === 0;
   const friends = isFriendsTrip(trip);
+  const mayFinalize = canFinalize(trip, sync.session?.user.id);
 
   if (trip.expenses.length === 0 && trip.payments.length === 0) {
     return (
       <EmptyState
         emoji="🤝"
-        title="Nothing to settle yet"
+        title={t('Nothing to settle yet')}
         body={
           friends
-            ? 'Once expenses are added, who pays whom shows up here.'
-            : 'Once expenses are added, the payments between family heads show up here.'
+            ? t('Once expenses are added, who pays whom shows up here.')
+            : t('Once expenses are added, the payments between family heads show up here.')
         }
       />
     );
@@ -194,9 +179,11 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
   const confirmFinalize = () =>
     confirmDialog({
       icon: 'lock',
-      title: 'Finalise this trip?',
-      message: 'Expenses can no longer be added or changed, so the amounts below stay put. Payments can still be marked as paid, and the trip can be reopened later.',
-      confirmLabel: 'Finalise trip',
+      title: t('Finalise this trip?'),
+      message: t(
+        'Expenses can no longer be added or changed, so the amounts below stay put. Payments can still be marked as paid, and the trip can be reopened later.',
+      ),
+      confirmLabel: t('Finalise trip'),
       onConfirm: () => finalizeTrip(trip.id),
     });
 
@@ -207,9 +194,9 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
     } catch (error) {
       confirmDialog({
         icon: 'pdf',
-        title: 'Could not make the PDF',
-        message: error instanceof Error ? error.message : 'Something went wrong.',
-        confirmLabel: 'OK',
+        title: t('Could not make the PDF'),
+        message: error instanceof Error ? t(error.message) : t('Something went wrong.'),
+        confirmLabel: t('OK'),
         hideCancel: true,
       });
     }
@@ -218,134 +205,38 @@ export function SettleTab({ trip, summary }: { trip: StoredTrip; summary: TripSu
 
   return (
     <View style={styles.list}>
-      {!trip.finalizedAt && (
-        <Card>
-          <ThemedText type="bold">Is the trip over?</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {canFinalize(trip, sync.session?.user.id)
-              ? 'Finalise it to lock the expenses, so these amounts stay put while everyone pays.'
+      {friends ? <FriendsList trip={trip} summary={summary} /> : <FamilyOverview trip={trip} summary={summary} />}
+
+      <View style={styles.footer}>
+        <View style={styles.footerButtons}>
+          {!trip.finalizedAt && mayFinalize && (
+            <Button label={t('Finalise trip')} icon="lock" variant="soft" onPress={confirmFinalize} style={styles.grow} />
+          )}
+          <Button
+            label={exporting ? t('Making the PDF…') : t('Share PDF')}
+            icon="pdf"
+            variant="soft"
+            disabled={exporting}
+            onPress={() => void exportPdf()}
+            style={styles.grow}
+          />
+        </View>
+        {!trip.finalizedAt && (
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+            {mayFinalize
+              ? t('Finalise when the trip is over, so the amounts stay put while everyone pays.')
               : friends
-                ? 'The trip’s creator can finalise it, which locks the expenses while everyone pays.'
-                : 'The trip’s creator or a family head can finalise it, which locks the expenses while everyone pays.'}
+                ? t('The trip’s creator can finalise it, which locks the expenses while everyone pays.')
+                : t('The trip’s creator or a family head can finalise it, which locks the expenses while everyone pays.')}
           </ThemedText>
-          {canFinalize(trip, sync.session?.user.id) && (
-            <Button label="Finalise trip" icon="lock" variant="soft" compact onPress={confirmFinalize} style={styles.start} />
-          )}
-        </Card>
-      )}
-
-      {friends ? (
-        <>
-          <View>
-            <ThemedText type="heading">Who pays whom</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              The fewest payments that square everyone up
-            </ThemedText>
-          </View>
-          {headsDone ? (
-            <Card>
-              <ThemedText type="bold">🎉 Everyone is settled</ThemedText>
-            </Card>
-          ) : (
-            betweenFamilies.map((transfer) => (
-              <Card key={`${transfer.fromMemberId}-${transfer.toMemberId}`}>
-                <TransferRow trip={trip} transfer={transfer} signedIn={sync.session !== null} />
-              </Card>
-            ))
-          )}
-        </>
-      ) : (
-        <FamilySteps trip={trip} summary={summary} />
-      )}
-
-      <Button
-        label={exporting ? 'Making the PDF…' : 'Share summary as PDF'}
-        icon="pdf"
-        variant="soft"
-        disabled={exporting}
-        onPress={() => void exportPdf()}
-        style={styles.section}
-      />
-      {trip.payments.length > 0 && (
-        <ThemedText type="caption" themeColor="textSecondary" style={styles.note}>
-          Payments marked as paid are listed under Expenses, where they can be undone.
-        </ThemedText>
-      )}
-    </View>
-  );
-}
-
-/** Heads settle between families first, then each family inside; a family's step stays locked until its head is square. */
-function FamilySteps({ trip, summary }: { trip: StoredTrip; summary: TripSummary }) {
-  const theme = useTheme();
-  const sync = useSync();
-  const { name } = lookups(trip);
-  const { betweenFamilies, withinFamily, familyNets } = summary.settlement;
-  const internal = trip.families
-    .map((family) => ({
-      family,
-      transfers: withinFamily.get(family.id) ?? [],
-      locked: (familyNets.get(family.id) ?? 0) !== 0,
-    }))
-    .filter(({ transfers }) => transfers.length > 0);
-  const headsDone = betweenFamilies.length === 0;
-
-  return (
-    <>
-      <Step number={1} title="Between families" subtitle="Only the family heads pay each other" done={headsDone} />
-      {headsDone ? (
-        <Card>
-          <ThemedText type="bold">🎉 All families are settled</ThemedText>
-        </Card>
-      ) : (
-        betweenFamilies.map((transfer) => (
-          <Card key={`${transfer.fromFamilyId}-${transfer.toFamilyId}`}>
-            <TransferRow trip={trip} transfer={transfer} betweenFamilies signedIn={sync.session !== null} />
-          </Card>
-        ))
-      )}
-
-      <View style={styles.section}>
-        <Step
-          number={2}
-          title="Inside each family"
-          subtitle="Can be paid once that family’s head has settled above"
-          done={headsDone && internal.length === 0}
-        />
+        )}
+        {trip.payments.length > 0 && (
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+            {t('Payments marked as paid are listed under Expenses, where they can be undone.')}
+          </ThemedText>
+        )}
       </View>
-      {internal.length === 0 && (
-        <Card>
-          <ThemedText type="bold">Nothing to settle inside any family</ThemedText>
-        </Card>
-      )}
-      {internal.map(({ family, transfers, locked }) => (
-        <Card key={family.id} style={styles.familyCard}>
-          <View style={styles.row}>
-            <Avatar name={family.name} color={family.color} size={30} />
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.grow}>
-              {family.name} family
-            </ThemedText>
-            {locked && <Icon name="lock" size={18} color={theme.textSecondary} />}
-          </View>
-          {locked && (
-            <ThemedText type="small" themeColor="textSecondary">
-              These can be paid once {name(family.headId)} has settled with the other families.
-            </ThemedText>
-          )}
-          <View style={[styles.familyCard, locked && styles.locked]}>
-            {transfers.map((transfer) => (
-              <TransferRow
-                key={`${transfer.fromMemberId}-${transfer.toMemberId}`}
-                trip={trip}
-                transfer={transfer}
-                locked={locked}
-                signedIn={sync.session !== null}
-              />
-            ))}
-          </View>
-        </Card>
-      ))}
-    </>
+    </View>
   );
 }
 
@@ -353,44 +244,31 @@ const styles = StyleSheet.create({
   list: {
     gap: Spacing.three,
   },
-  section: {
-    marginTop: Spacing.three,
+  sectionTitle: {
+    marginTop: Spacing.two,
   },
-  familyCard: {
-    gap: Spacing.three,
-  },
-  locked: {
-    opacity: 0.55,
-  },
-  transfer: {
+  card: {
     gap: Spacing.two,
   },
-  row: {
-    flexDirection: 'row',
+  tile: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.small,
     alignItems: 'center',
-    gap: Spacing.three,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: Spacing.two,
-  },
-  start: {
-    alignSelf: 'flex-start',
-    marginTop: Spacing.one,
+    justifyContent: 'center',
   },
   grow: {
     flex: 1,
   },
-  step: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+  footer: {
+    gap: Spacing.two,
+    marginTop: Spacing.three,
   },
-  note: {
+  footerButtons: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  centered: {
     textAlign: 'center',
   },
 });

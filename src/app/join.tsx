@@ -5,9 +5,11 @@ import { KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button, EmptyState, Field } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 import { joinTrip, useSync } from '@/sync/sync';
 
 export default function JoinScreen() {
+  const t = useT();
   const router = useRouter();
   const sync = useSync();
   const [code, setCode] = useState('');
@@ -18,13 +20,13 @@ export default function JoinScreen() {
     return (
       <EmptyState
         emoji="🔑"
-        title="Sign in to join a trip"
+        title={t('Sign in to join a trip')}
         body={
           sync.configured
-            ? 'Joining someone else’s trip needs an account, so everyone sees the same expenses.'
+            ? t('Joining someone else’s trip needs an account, so everyone sees the same expenses.')
             : 'Sharing between phones is not set up in this build yet.'
         }>
-        {sync.configured && <Button label="Sign in" onPress={() => router.replace('/account')} style={styles.button} />}
+        {sync.configured && <Button label={t('Sign in')} onPress={() => router.replace('/account')} style={styles.button} />}
       </EmptyState>
     );
   }
@@ -36,7 +38,7 @@ export default function JoinScreen() {
       const tripId = await joinTrip(code);
       router.replace(`/trip/${tripId}`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not join that trip.');
+      setMessage(error instanceof Error ? error.message : t('Could not join that trip.'));
       setBusy(false);
     }
   };
@@ -45,10 +47,10 @@ export default function JoinScreen() {
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ThemedText type="small" themeColor="textSecondary">
-          Ask whoever created the trip for its invite code. They can find it under Families or People in the trip.
+          {t('Ask whoever created the trip for its invite code. They can find it under Families or People in the trip.')}
         </ThemedText>
         <Field
-          label="Invite code"
+          label={t('Invite code')}
           placeholder="ABCD-EFGH"
           value={code}
           onChangeText={setCode}
@@ -58,11 +60,11 @@ export default function JoinScreen() {
         />
         {message && (
           <ThemedText type="small" themeColor="negative">
-            {message}
+            {t(message)}
           </ThemedText>
         )}
         <Button
-          label={busy ? 'Joining…' : 'Join trip'}
+          label={busy ? t('Joining…') : t('Join trip')}
           onPress={join}
           disabled={busy || code.replace(/[^A-Za-z0-9]/g, '').length < 8}
           style={styles.button}

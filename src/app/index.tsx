@@ -10,8 +10,9 @@ import { BalancePill, Button, Card, EmptyState, Fab, IconButton, Tag } from '@/c
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { plural, useT } from '@/i18n';
 import { hasSeenWelcome } from '@/store/onboarding';
-import { plural, summarizeTrip } from '@/store/summary';
+import { summarizeTrip } from '@/store/summary';
 import { createSampleTrip, deleteTrip, isFriendsTrip, useTrips, type StoredTrip } from '@/store/trips';
 import { isShared, usePullToSync, useSync } from '@/sync/sync';
 
@@ -19,6 +20,7 @@ function TripCard({ trip }: { trip: StoredTrip }) {
   const router = useRouter();
   const theme = useTheme();
   const sync = useSync();
+  const t = useT();
   const { myFamilyNet, totalSpent, incomplete } = summarizeTrip(trip);
   const friends = isFriendsTrip(trip);
 
@@ -28,13 +30,13 @@ function TripCard({ trip }: { trip: StoredTrip }) {
     confirmDialog({
       icon: leaving ? 'logout' : 'delete',
       tone: 'danger',
-      title: leaving ? `Leave "${trip.name}"?` : `Delete "${trip.name}"?`,
+      title: leaving ? t('Leave "{name}"?', { name: trip.name }) : t('Delete "{name}"?', { name: trip.name }),
       message: leaving
-        ? 'It is removed from this phone. Everyone else keeps it, and you can join again with the code.'
+        ? t('It is removed from this phone. Everyone else keeps it, and you can join again with the code.')
         : isShared(trip.id)
-          ? 'All its people, expenses and payments are deleted for everyone on the trip.'
-          : 'All its people, expenses and payments will be removed from this phone.',
-      confirmLabel: leaving ? 'Leave trip' : 'Delete trip',
+          ? t('All its people, expenses and payments are deleted for everyone on the trip.')
+          : t('All its people, expenses and payments will be removed from this phone.'),
+      confirmLabel: leaving ? t('Leave trip') : t('Delete trip'),
       onConfirm: () => deleteTrip(trip.id),
     });
 
@@ -52,11 +54,11 @@ function TripCard({ trip }: { trip: StoredTrip }) {
           <View style={styles.grow}>
             <ThemedText type="bold">{trip.name}</ThemedText>
             <View style={styles.meta}>
-              <Tag label={friends ? 'Friends' : 'Families'} />
+              <Tag label={friends ? t('Friends') : t('Families')} />
               <ThemedText type="small" themeColor="textSecondary">
                 {friends
-                  ? plural(trip.members.length, 'person', 'people')
-                  : `${plural(trip.families.length, 'family', 'families')} · ${plural(trip.members.length, 'person', 'people')}`}
+                  ? plural(t, trip.members.length, '{count} person', '{count} people')
+                  : `${plural(t, trip.families.length, '{count} family', '{count} families')} · ${plural(t, trip.members.length, '{count} person', '{count} people')}`}
               </ThemedText>
             </View>
           </View>
@@ -65,22 +67,22 @@ function TripCard({ trip }: { trip: StoredTrip }) {
         <View style={[styles.row, styles.footer]}>
           <BalancePill
             amount={myFamilyNet}
-            positive={friends ? 'You get back' : 'Your family gets back'}
-            negative={friends ? 'You owe' : 'Your family owes'}
+            positive={friends ? t('You get back {amount}') : t('Your family gets back {amount}')}
+            negative={friends ? t('You owe {amount}') : t('Your family owes {amount}')}
             settled={
               incomplete
-                ? 'Still syncing…'
+                ? t('Still syncing…')
                 : totalSpent === 0
-                  ? 'No expenses yet'
+                  ? t('No expenses yet')
                   : !trip.meId
-                    ? 'Tell us who you are'
+                    ? t('Tell us who you are')
                     : friends
-                      ? 'You are settled'
-                      : 'Your family is settled'
+                      ? t('You are settled')
+                      : t('Your family is settled')
             }
           />
           <ThemedText type="small" numberOfLines={1} themeColor="textSecondary">
-            {formatPaise(totalSpent)} spent
+            {t('{amount} spent', { amount: formatPaise(totalSpent) })}
           </ThemedText>
         </View>
       </Card>
@@ -93,6 +95,7 @@ export default function TripsScreen() {
   const insets = useSafeAreaInsets();
   const trips = useTrips();
   const sync = useSync();
+  const t = useT();
 
   // The first time FamSplit opens on a phone, explain how it works before anything else.
   useEffect(() => {
@@ -106,9 +109,9 @@ export default function TripsScreen() {
       options={{
         headerRight: () =>
           sync.session ? (
-            <IconButton icon="person" label="Account" onPress={() => router.push('/account')} />
+            <IconButton icon="person" label={t('Account')} onPress={() => router.push('/account')} />
           ) : sync.configured ? (
-            <Button label="Sign in" variant="soft" compact onPress={() => router.push('/account')} />
+            <Button label={t('Sign in')} variant="soft" compact onPress={() => router.push('/account')} />
           ) : null,
       }}
     />
@@ -122,12 +125,12 @@ export default function TripsScreen() {
         {header}
         <EmptyState
           emoji="🧳"
-          title="Plan your first trip"
-          body="Add the families travelling together. Everyone logs what they spend, and only the family heads settle up at the end.">
-          <Button label="Create a trip" icon="add" onPress={() => router.push('/new-trip')} style={styles.emptyButton} />
+          title={t('Plan your first trip')}
+          body={t('Add your family or friends. Everyone logs what they spend, and FamSplit works out who pays whom at the end.')}>
+          <Button label={t('Create a trip')} icon="add" onPress={() => router.push('/new-trip')} style={styles.emptyButton} />
           {sync.configured && (
             <Button
-              label="Join with a code"
+              label={t('Join with a code')}
               icon="link"
               variant="soft"
               onPress={() => router.push('/join')}
@@ -135,7 +138,7 @@ export default function TripsScreen() {
             />
           )}
           <Button
-            label="Try a sample trip"
+            label={t('Try a sample trip')}
             variant="soft"
             onPress={() => router.push(`/trip/${createSampleTrip()}`)}
             style={styles.emptyButton}
@@ -149,32 +152,32 @@ export default function TripsScreen() {
     <View style={styles.grow}>
       {header}
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]} refreshControl={refresh}>
-        <ThemedText type="title">Your trips</ThemedText>
+        <ThemedText type="title">{t('Your trips')}</ThemedText>
         {sync.error && (
           <ThemedText type="small" themeColor="negative">
-            {sync.error}
+            {t(sync.error)}
           </ThemedText>
         )}
         {sync.configured && !sync.session && (
           <Card>
-            <ThemedText type="bold">Travelling with others?</ThemedText>
+            <ThemedText type="bold">{t('Travelling with others?')}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Sign in so your family or friends can join your trips with a code and everyone sees the same expenses.
+              {t('Sign in so your family or friends can join your trips with a code and everyone sees the same expenses.')}
             </ThemedText>
-            <Button label="Sign in" variant="soft" compact onPress={() => router.push('/account')} style={styles.start} />
+            <Button label={t('Sign in')} variant="soft" compact onPress={() => router.push('/account')} style={styles.start} />
           </Card>
         )}
         {trips.map((trip) => (
           <TripCard key={trip.id} trip={trip} />
         ))}
         {sync.configured && (
-          <Button label="Join with a code" icon="link" variant="soft" onPress={() => router.push('/join')} />
+          <Button label={t('Join with a code')} icon="link" variant="soft" onPress={() => router.push('/join')} />
         )}
         <ThemedText type="caption" themeColor="textSecondary" style={styles.hint}>
-          Press and hold a trip to delete or leave it
+          {t('Press and hold a trip to delete or leave it')}
         </ThemedText>
       </ScrollView>
-      <Fab label="New trip" icon="add" bottom={insets.bottom} onPress={() => router.push('/new-trip')} />
+      <Fab label={t('New trip')} icon="add" bottom={insets.bottom} onPress={() => router.push('/new-trip')} />
     </View>
   );
 }

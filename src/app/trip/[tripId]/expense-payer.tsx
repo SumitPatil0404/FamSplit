@@ -7,10 +7,12 @@ import { Avatar, Card, Checkbox, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { readDraft, sum, updateDraft, useDraft } from '@/store/expense-draft';
 import { personGroups, useTrip } from '@/store/trips';
 
 export default function PayerScreen() {
+  const t = useT();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -18,10 +20,10 @@ export default function PayerScreen() {
   const draft = useDraft();
 
   if (!trip || !draft) {
-    return <EmptyState emoji="🤔" title="Nothing to choose for" body="Go back and start the expense again." />;
+    return <EmptyState emoji="🤔" title={t('Nothing to choose for')} body={t('Go back and start the expense again.')} />;
   }
-  const { amount, several, paidBy } = readDraft(draft, trip);
-  const nameOf = (memberId: string, name: string) => (memberId === trip.meId ? `${name} (you)` : name);
+  const { amount, several, paidBy } = readDraft(draft, trip, t);
+  const nameOf = (memberId: string, name: string) => (memberId === trip.meId ? t('{name} (you)', { name }) : name);
 
   const choose = (payerId: string) => {
     updateDraft({ payerId });
@@ -33,13 +35,15 @@ export default function PayerScreen() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.intro}>
-        <ThemedText type="heading">Who paid {amount > 0 ? formatPaise(amount) : 'for this'}?</ThemedText>
+        <ThemedText type="heading">
+          {amount > 0 ? t('Who paid {amount}?', { amount: formatPaise(amount) }) : t('Who paid for this?')}
+        </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Tap the one person who paid the whole bill.
+          {t('Tap the one person who paid the whole bill.')}
         </ThemedText>
       </View>
 
-      {personGroups(trip).map((group) => (
+      {personGroups(trip, t).map((group) => (
         <View key={group.id} style={styles.group}>
           {group.title && (
             <View style={styles.familyHeading}>
@@ -82,7 +86,7 @@ export default function PayerScreen() {
 
       <View style={styles.group}>
         <ThemedText type="smallBold" themeColor="textSecondary">
-          Paid together?
+          {t('Paid together?')}
         </ThemedText>
         <Pressable
           accessibilityRole="button"
@@ -97,17 +101,17 @@ export default function PayerScreen() {
               opacity: pressed ? 0.8 : 1,
             },
           ]}>
-          <View style={[styles.severalIcon, { backgroundColor: theme.primary }]}>
+          <View style={[styles.severalIcon, { backgroundColor: theme.primaryFill }]}>
             <Icon name="group" size={22} color={theme.onPrimary} />
           </View>
           <View style={styles.grow}>
             <ThemedText type="bold" themeColor="primary">
-              Several people paid
+              {t('Several people paid')}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               {several
-                ? `${Object.keys(paidBy).length} people · ${formatPaise(sum(paidBy))}`
-                : 'Split the bill between payers and enter what each one paid'}
+                ? `${t('{count} people', { count: Object.keys(paidBy).length })} · ${formatPaise(sum(paidBy))}`
+                : t('Split the bill between payers and enter what each one paid')}
             </ThemedText>
           </View>
           <Icon name="chevronRight" size={22} color={theme.primary} />

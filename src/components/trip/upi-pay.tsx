@@ -8,6 +8,7 @@ import { Button } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise, upiLink, type Paise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 
 type Props = {
   payee: string;
@@ -20,6 +21,7 @@ type Props = {
 
 function CopyRow({ label, value, copyText }: { label: string; value: string; copyText: string }) {
   const theme = useTheme();
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -40,13 +42,13 @@ function CopyRow({ label, value, copyText }: { label: string; value: string; cop
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Copy ${label.toLowerCase()}`}
+        accessibilityLabel={t('Copy {what}', { what: label })}
         hitSlop={8}
         onPress={() => void copy()}
         style={[styles.copyButton, { backgroundColor: copied ? theme.positiveSoft : theme.primarySoft }]}>
         <Icon name={copied ? 'check' : 'copy'} size={16} color={copied ? theme.positive : theme.primary} />
         <ThemedText type="smallBold" style={{ color: copied ? theme.positive : theme.primary }}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('Copied') : t('Copy')}
         </ThemedText>
       </Pressable>
     </View>
@@ -60,6 +62,7 @@ function CopyRow({ label, value, copyText }: { label: string; value: string; cop
  */
 export function UpiPaySheet({ payee, upiId, amount, note, onClose, onMarkPaid }: Props) {
   const theme = useTheme();
+  const t = useT();
   const [noApp, setNoApp] = useState(false);
 
   const openApp = async () => {
@@ -72,31 +75,31 @@ export function UpiPaySheet({ payee, upiId, amount, note, onClose, onMarkPaid }:
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Close" onPress={onClose} style={styles.backdrop}>
+      <Pressable accessibilityLabel={t('Close')} onPress={onClose} style={styles.backdrop}>
         <Pressable onPress={() => {}} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
           <View style={[styles.badge, { backgroundColor: theme.primarySoft }]}>
             <Icon name="rupee" size={28} color={theme.primary} />
           </View>
           <ThemedText type="heading" style={styles.centered}>
-            Pay {payee} {formatPaise(amount)}
+            {t('Pay {name} {amount}', { name: payee, amount: formatPaise(amount) })}
           </ThemedText>
 
           <View style={[styles.details, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <CopyRow label="UPI ID" value={upiId} copyText={upiId} />
+            <CopyRow label={t('UPI ID')} value={upiId} copyText={upiId} />
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
-            <CopyRow label="Amount" value={formatPaise(amount)} copyText={(amount / 100).toFixed(2)} />
+            <CopyRow label={t('Amount')} value={formatPaise(amount)} copyText={(amount / 100).toFixed(2)} />
           </View>
 
           <ThemedText type="small" themeColor={noApp ? 'negative' : 'textSecondary'} style={styles.centered}>
             {noApp
-              ? 'No UPI app opened. Copy the UPI ID and pay from any UPI app.'
-              : 'If your UPI app will not complete the payment, copy the UPI ID, open the app, choose “Pay UPI ID” and paste it.'}
+              ? t('No UPI app opened. Copy the UPI ID and pay from any UPI app.')
+              : t('If your UPI app will not complete the payment, copy the UPI ID, open the app, choose “Pay UPI ID” and paste it.')}
           </ThemedText>
 
           <View style={styles.actions}>
-            <Button label="Open UPI app" icon="openApp" onPress={() => void openApp()} />
+            <Button label={t('Open UPI app')} icon="openApp" onPress={() => void openApp()} />
             <Button
-              label="I have paid"
+              label={t('I have paid')}
               icon="check"
               variant="soft"
               onPress={() => {
@@ -106,7 +109,7 @@ export function UpiPaySheet({ payee, upiId, amount, note, onClose, onMarkPaid }:
             />
             <Pressable accessibilityRole="button" hitSlop={8} onPress={onClose} style={styles.close}>
               <ThemedText type="smallBold" themeColor="textSecondary">
-                Close
+                {t('Close')}
               </ThemedText>
             </Pressable>
           </View>

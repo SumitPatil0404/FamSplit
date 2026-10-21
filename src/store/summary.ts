@@ -1,5 +1,7 @@
 import { settleTrip, type TripSettlement } from '@/domain';
 
+import { englishT, msg, type T } from '@/i18n/translate';
+
 import type { StoredTrip } from './trips';
 
 /** Everything a screen needs to describe where a trip stands, from the point of view of this phone's owner. */
@@ -35,13 +37,20 @@ export function summarizeTrip(trip: StoredTrip) {
 
 export type TripSummary = ReturnType<typeof summarizeTrip>;
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = [msg('Jan'), msg('Feb'), msg('Mar'), msg('Apr'), msg('May'), msg('Jun'), msg('Jul'), msg('Aug'), msg('Sep'), msg('Oct'), msg('Nov'), msg('Dec')];
 
-export function formatDay(iso: string): string {
+export function formatDay(iso: string, t: T = englishT): string {
   const date = new Date(iso);
-  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+  return `${date.getDate()} ${t(MONTHS[date.getMonth()])}`;
 }
 
-export function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
+/** "Today", "Yesterday" or "18 Oct". */
+export function relativeDay(iso: string, t: T = englishT): string {
+  const day = new Date(iso).toDateString();
+  const today = new Date();
+  if (day === today.toDateString()) {
+    return t('Today');
+  }
+  today.setDate(today.getDate() - 1);
+  return day === today.toDateString() ? t('Yesterday') : formatDay(iso, t);
 }

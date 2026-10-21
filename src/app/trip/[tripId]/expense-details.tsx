@@ -5,21 +5,28 @@ import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { CategoryTile } from '@/components/trip/expense-parts';
-import { Avatar, Card, EmptyState, IconButton } from '@/components/ui';
+import { Avatar, Card, Emphasis, EmptyState, IconButton } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { expenseShares, formatPaise, type Split } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT, type T } from '@/i18n';
 import { describeActivity } from '@/store/activity';
 import { categoryOf } from '@/store/categories';
 import { formatDay } from '@/store/summary';
 import { deleteExpense, isFriendsTrip, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
 
-const SPLIT_NAMES: Record<Split['type'], string> = {
-  equal: 'equally per person',
-  perFamily: 'equally per family',
-  shares: 'by shares',
-  exact: 'by exact amounts',
-};
+function splitTitle(type: Split['type'], t: T): string {
+  switch (type) {
+    case 'equal':
+      return t('Split equally per person');
+    case 'perFamily':
+      return t('Split equally per family');
+    case 'shares':
+      return t('Split by shares');
+    case 'exact':
+      return t('Split by exact amounts');
+  }
+}
 
 /** Empty when the expense refers to people who have not been downloaded yet. */
 function sharesOf(expense: StoredExpense, trip: StoredTrip): Map<string, number> {
@@ -39,6 +46,7 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredExpense }) {
+  const t = useT();
   const router = useRouter();
   const theme = useTheme();
   const category = categoryOf(expense);
@@ -49,8 +57,8 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
   const familyColor = (memberId: string) =>
     trip.families.find((family) => family.id === member(memberId)?.familyId)?.color ?? theme.textSecondary;
   const nameOf = (memberId: string) => {
-    const name = member(memberId)?.name ?? 'Someone who has left';
-    return memberId === trip.meId ? `${name} (you)` : name;
+    const name = member(memberId)?.name ?? t('Someone who has left');
+    return memberId === trip.meId ? t('{name} (you)', { name }) : name;
   };
   const payers = Object.keys(expense.paidBy).filter((memberId) => expense.paidBy[memberId] > 0);
 
@@ -59,7 +67,7 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
     if (entry.entity !== 'expense' || row?.id !== expense.id) {
       return [];
     }
-    const line = describeActivity(entry, trip);
+    const line = describeActivity(entry, trip, t);
     return line ? [{ entry, line }] : [];
   });
 
@@ -69,9 +77,9 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
     confirmDialog({
       icon: 'delete',
       tone: 'danger',
-      title: 'Delete this expense?',
-      message: 'Everyone’s balances will be recalculated.',
-      confirmLabel: 'Delete expense',
+      title: t('Delete this expense?'),
+      message: t('Everyone’s balances will be recalculated.'),
+      confirmLabel: t('Delete expense'),
       onConfirm: () => {
         router.back();
         deleteExpense(trip.id, expense.id);
@@ -87,8 +95,8 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
             ? undefined
             : () => (
                 <View style={styles.headerButtons}>
-                  <IconButton icon="edit" label="Edit expense" onPress={edit} />
-                  <IconButton icon="delete" label="Delete expense" color={theme.negative} onPress={confirmDelete} />
+                  <IconButton icon="edit" label={t('Edit expense')} onPress={edit} />
+                  <IconButton icon="delete" label={t('Delete expense')} color={theme.negative} onPress={confirmDelete} />
                 </View>
               ),
         }}
@@ -101,7 +109,7 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
         </ThemedText>
         <ThemedText type="amount">{formatPaise(expense.amount)}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {category.label} · {formatDay(expense.date)}
+          {t(category.label)} · {formatDay(expense.date, t)}
         </ThemedText>
       </View>
 
@@ -109,13 +117,13 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
         <Card style={styles.row}>
           <Icon name="lock" size={18} color={theme.textSecondary} />
           <ThemedText type="small" themeColor="textSecondary" style={styles.grow}>
-            The trip is finalised. Reopen it to change or delete this expense.
+            {t('The trip is finalised. Reopen it to change or delete this expense.')}
           </ThemedText>
         </Card>
       )}
 
       <View>
-        <SectionTitle>Paid by</SectionTitle>
+        <SectionTitle>{t('Paid by')}</SectionTitle>
         <Card style={styles.list}>
           {payers.map((memberId) => (
             <View key={memberId} style={styles.row}>
@@ -130,7 +138,7 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
       </View>
 
       <View>
-        <SectionTitle>{`Split ${SPLIT_NAMES[expense.split.type]}`}</SectionTitle>
+        <SectionTitle>{splitTitle(expense.split.type, t)}</SectionTitle>
         <Card style={styles.list}>
           {trip.families.map((family) => {
             const people = trip.members.filter((candidate) => candidate.familyId === family.id && (shares.get(candidate.id) ?? 0) > 0);
@@ -155,7 +163,7 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
                 <View style={styles.row}>
                   <Avatar name={family.name} color={family.color} size={32} />
                   <ThemedText type="bold" style={styles.grow} numberOfLines={1}>
-                    {family.name} family
+                    {t('{name} family', { name: family.name })}
                   </ThemedText>
                   <ThemedText type="bold">{formatPaise(total)}</ThemedText>
                 </View>
@@ -177,15 +185,13 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
 
       {history.length > 0 && (
         <View>
-          <SectionTitle>History</SectionTitle>
+          <SectionTitle>{t('History')}</SectionTitle>
           <Card style={styles.list}>
             {history.map(({ entry, line }) => (
               <View key={entry.id}>
-                <ThemedText type="small">
-                  <ThemedText type="smallBold">{line.who}</ThemedText> {line.what}
-                </ThemedText>
+                <Emphasis text={line.what} bold={line.who} small />
                 <ThemedText type="caption" themeColor="textSecondary">
-                  {formatDay(entry.at)}
+                  {formatDay(entry.at, t)}
                   {line.detail ? ` · ${line.detail}` : ''}
                 </ThemedText>
               </View>
@@ -198,12 +204,13 @@ function ExpenseDetails({ trip, expense }: { trip: StoredTrip; expense: StoredEx
 }
 
 export default function ExpenseDetailsScreen() {
+  const t = useT();
   const { tripId, expenseId } = useLocalSearchParams<{ tripId: string; expenseId: string }>();
   const trip = useTrip(tripId);
   const expense = trip?.expenses.find((candidate) => candidate.id === expenseId);
 
   if (!trip || !expense) {
-    return <EmptyState emoji="🧾" title="Expense not found" body="It may have been deleted." />;
+    return <EmptyState emoji="🧾" title={t('Expense not found')} body={t('It may have been deleted.')} />;
   }
   return <ExpenseDetails trip={trip} expense={expense} />;
 }

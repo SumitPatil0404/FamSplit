@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 
 import { showToast } from '@/components/toast';
 import { Colors } from '@/constants/theme';
+import { currentT } from '@/i18n';
 
 type Notifications = typeof import('expo-notifications');
 
@@ -35,16 +36,17 @@ export async function registerForPush(client: SupabaseClient): Promise<void> {
   try {
     const push = notifications();
     if (Platform.OS === 'android') {
+      const t = currentT();
       // Two channels, so reminders can be silenced in Android's settings without losing trip updates.
       await push.setNotificationChannelAsync('default', {
-        name: 'Trip updates',
-        description: 'Expenses and payments added or changed by others on your trips',
+        name: t('Trip updates'),
+        description: t('Expenses and payments added or changed by others on your trips'),
         importance: push.AndroidImportance.HIGH,
         lightColor: Colors.light.primary,
       });
       await push.setNotificationChannelAsync('reminders', {
-        name: 'Payment reminders',
-        description: 'When someone reminds you that a payment is due',
+        name: t('Payment reminders'),
+        description: t('When someone reminds you that a payment is due'),
         importance: push.AndroidImportance.HIGH,
         lightColor: Colors.light.primary,
       });

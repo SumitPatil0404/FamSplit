@@ -7,25 +7,18 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Checkbox, Field } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { createTrip, getMyName, type TripKind } from '@/store/trips';
 
-const KINDS: { kind: TripKind; icon: IconName; title: string; body: string }[] = [
-  {
-    kind: 'families',
-    icon: 'family',
-    title: 'Families',
-    body: 'Several families travel together. Family heads settle up first, then each family inside.',
-  },
-  {
-    kind: 'friends',
-    icon: 'group',
-    title: 'Friends',
-    body: 'Friends, colleagues or roommates. Everyone settles up with everyone.',
-  },
+const KINDS: { kind: TripKind; icon: IconName }[] = [
+  { kind: 'families', icon: 'family' },
+  { kind: 'friends', icon: 'group' },
 ];
 
 function KindCard({ option, selected, onPress }: { option: (typeof KINDS)[number]; selected: boolean; onPress: () => void }) {
   const theme = useTheme();
+  const t = useT();
+  const families = option.kind === 'families';
   return (
     <Pressable
       accessibilityRole="radio"
@@ -39,15 +32,17 @@ function KindCard({ option, selected, onPress }: { option: (typeof KINDS)[number
           opacity: pressed ? 0.8 : 1,
         },
       ]}>
-      <View style={[styles.kindIcon, { backgroundColor: selected ? theme.primary : theme.primarySoft }]}>
+      <View style={[styles.kindIcon, { backgroundColor: selected ? theme.primaryFill : theme.primarySoft }]}>
         <Icon name={option.icon} size={26} color={selected ? theme.onPrimary : theme.primary} />
       </View>
       <View style={styles.grow}>
         <ThemedText type="bold" themeColor={selected ? 'primary' : 'text'}>
-          {option.title}
+          {families ? t('Families') : t('Friends')}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {option.body}
+          {families
+            ? t('Several families travel together. Family heads settle up first, then each family inside.')
+            : t('Friends, colleagues or roommates. Everyone settles up with everyone.')}
         </ThemedText>
       </View>
       <Checkbox checked={selected} />
@@ -56,6 +51,7 @@ function KindCard({ option, selected, onPress }: { option: (typeof KINDS)[number
 }
 
 export default function NewTripScreen() {
+  const t = useT();
   const router = useRouter();
   const [kind, setKind] = useState<TripKind | null>(null);
   const [name, setName] = useState('');
@@ -89,20 +85,20 @@ export default function NewTripScreen() {
         {kind && (
           <View style={styles.fields}>
             <Field
-              label="Trip name"
-              placeholder={families ? 'Goa with the cousins' : 'Manali with college friends'}
+              label={t('Trip name')}
+              placeholder={families ? t('Goa with the cousins') : t('Manali with college friends')}
               value={name}
               onChangeText={setName}
               autoFocus
             />
-            <Field label="Your name" placeholder="Rajesh" value={myName} onChangeText={setMyName} />
-            {families && <Field label="Your family" placeholder="Sharma" value={familyName} onChangeText={setFamilyName} />}
+            <Field label={t('Your name')} placeholder="Rajesh" value={myName} onChangeText={setMyName} />
+            {families && <Field label={t('Your family')} placeholder="Sharma" value={familyName} onChangeText={setFamilyName} />}
             <ThemedText type="small" themeColor="textSecondary">
               {families
-                ? 'You start as the head of your family. You can add the rest of your family and the other families next.'
-                : 'You can add the others next, or share the invite code so they join themselves. The type of trip cannot be changed later.'}
+                ? t('You start as the head of your family. You can add the rest of your family and the other families next.')
+                : t('You can add the others next, or share the invite code so they join themselves. The type of trip cannot be changed later.')}
             </ThemedText>
-            <Button label="Create trip" onPress={create} disabled={!ready} style={styles.button} />
+            <Button label={t('Create trip')} onPress={create} disabled={!ready} style={styles.button} />
           </View>
         )}
       </ScrollView>

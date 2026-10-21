@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { expenseShares, toPaise, type Paise, type Split } from '@/domain';
+import { englishT, plural, type T } from '@/i18n/translate';
 
 import { CATEGORIES, guessCategory, type Category } from './categories';
 import type { StoredExpense, StoredTrip } from './trips';
@@ -19,6 +20,8 @@ export type ExpenseDraft = {
   expenseId?: string;
   amountText: string;
   description: string;
+  /** When it was paid; today for a new expense. */
+  date: string;
   /** Unset until someone picks one; until then the category follows the description. */
   categoryId?: string;
   payerId: string;
@@ -33,9 +36,11 @@ export type ExpenseDraft = {
 let draft: ExpenseDraft | null = null;
 const listeners = new Set<() => void>();
 
-function set(next: ExpenseDraft | null) {
+function set(next: ExpenseDraft | null, notify = true) {
   draft = next;
-  listeners.forEach((listener) => listener());
+  if (notify) {
+    listeners.forEach((listener) => listener());
+  }
 }
 
 function subscribe(listener: () => void) {
@@ -61,14 +66,18 @@ function toTexts(amounts: Record<string, Paise>): Record<string, string> {
   return Object.fromEntries(Object.entries(amounts).map(([memberId, value]) => [memberId, String(value / 100)]));
 }
 
-/** A fresh draft for a new expense, or one filled in from an expense being edited. */
-export function startDraft(trip: StoredTrip, existing?: StoredExpense) {
+/**
+ * A fresh draft for a new expense, or one filled in from an expense being edited. While a page is
+ * rendering it must not notify other components, so it passes `notify: false`.
+ */
+export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true) {
   const payers = existing ? Object.keys(existing.paidBy).filter((id) => existing.paidBy[id] > 0) : [];
   const split = existing?.split;
   set({
     tripId: trip.id,
     expenseId: existing?.id,
     amountText: existing ? String(existing.amount / 100) : '',
+    date: existing?.date ?? new Date().toISOString(),
     description: existing?.description ?? '',
     categoryId: existing?.category,
     payerId: existing ? (payers.length > 1 ? SEVERAL : payers[0]) : trip.meId || (trip.members[0]?.id ?? ''),
@@ -84,7 +93,7 @@ export function startDraft(trip: StoredTrip, existing?: StoredExpense) {
       trip.members.map((member) => [member.id, split?.type === 'shares' ? (split.shares[member.id] ?? 0) : 1]),
     ),
     exactTexts: split?.type === 'exact' ? toTexts(split.amounts) : {},
-  });
+  }, notify);
 }
 
 /** Keeps only digits and a single decimal point with up to two decimals. */
@@ -119,7 +128,7 @@ export function sum(amounts: Record<string, Paise>): Paise {
 }
 
 /** Everything the screens need to know about a draft, worked out in one place. */
-export function readDraft(draft: ExpenseDraft, trip: StoredTrip) {
+export function readDraft(draft: ExpenseDraft, trip: StoredTrip, t: T = englishT) {
   const amount = parseAmount(draft.amountText);
   const category: Category =
     CATEGORIES.find((candidate) => candidate.id === draft.categoryId) ?? guessCategory(draft.description);
@@ -152,48 +161,52 @@ export function readDraft(draft: ExpenseDraft, trip: StoredTrip) {
     }
   }
 
-  const payerProblem = several && sum(paidBy) !== amount ? 'What each person paid must add up to the total' : null;
+  const payerProblem = several && sum(paidBy) !== amount ? t('What each person paid must add up to the total') : null;
   const splitProblem =
     draft.mode === 'exact' && sum(exactAmounts) !== amount
-      ? 'What each person owes must add up to the total'
+      ? t('What each person owes must add up to the total')
       : amount > 0 && preview === null
-        ? 'Choose who to split it between'
+        ? t('Choose who to split it between')
         : null;
   const problem = trip.finalizedAt
-    ? 'This trip is finalised. Reopen it to change expenses.'
+    ? t('This trip is finalised. Reopen it to change expenses.')
     : amount <= 0
-      ? 'Enter how much was paid'
+      ? t('Enter how much was paid')
       : (payerProblem ?? splitProblem);
 
   return { amount, category, several, paidBy, exactAmounts, split, preview, payerProblem, splitProblem, problem };
 }
 
 /** "you", "Rajesh" or "2 people", for the "Paid by" button. */
-export function payerLabel(draft: ExpenseDraft, trip: StoredTrip, paidBy: Record<string, Paise>): string {
+export function payerLabel(draft: ExpenseDraft, trip: StoredTrip, paidBy: Record<string, Paise>, t: T = englishT): string {
   if (draft.payerId === SEVERAL) {
     const count = Object.keys(paidBy).length;
-    return count > 1 ? `${count} people` : 'several people';
+    return count > 1 ? t('{count} people', { count }) : t('several people');
   }
   if (draft.payerId === trip.meId) {
-    return 'you';
+    return t('you');
   }
-  return trip.members.find((member) => member.id === draft.payerId)?.name ?? 'choose';
+  return trip.members.find((member) => member.id === draft.payerId)?.name ?? t('choose');
 }
 
 /** "equally", "per family", "by shares"…, for the "split" button. */
-export function splitLabel(draft: ExpenseDraft, trip: StoredTrip): string {
+export function splitLabel(draft: ExpenseDraft, trip: StoredTrip, t: T = englishT): string {
   switch (draft.mode) {
     case 'equal': {
       const count = trip.members.filter((member) => draft.memberOn[member.id]).length;
-      return count === trip.members.length ? 'equally' : `equally, ${count} of ${trip.members.length}`;
+      return count === trip.members.length
+        ? t('equally')
+        : plural(t, count, 'between {count} person', 'between {count} people');
     }
     case 'perFamily': {
       const count = trip.families.filter((family) => draft.familyOn[family.id]).length;
-      return count === trip.families.length ? 'per family' : `per family, ${count} of ${trip.families.length}`;
+      return count === trip.families.length
+        ? t('per family')
+        : plural(t, count, 'between {count} family', 'between {count} families');
     }
     case 'shares':
-      return 'by shares';
+      return t('by shares');
     case 'exact':
-      return 'by exact amounts';
+      return t('by exact amounts');
   }
 }

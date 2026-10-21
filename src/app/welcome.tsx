@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Avatar, Button } from '@/components/ui';
 import { FamilyColors, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useT, type T } from '@/i18n';
 import { markWelcomeSeen } from '@/store/onboarding';
 
 const [VIOLET, GREEN, AMBER] = FamilyColors;
@@ -15,13 +16,14 @@ const [VIOLET, GREEN, AMBER] = FamilyColors;
 /** One "who pays whom" line, the same shape the Settle up tab uses. */
 function PaymentLine({ from, to, fromColor, toColor, amount }: { from: string; to: string; fromColor: string; toColor: string; amount: string }) {
   const theme = useTheme();
+  const t = useT();
   return (
     <View style={styles.line}>
       <Avatar name={from} color={fromColor} size={32} />
       <Icon name="arrowForward" size={18} color={theme.textSecondary} />
       <Avatar name={to} color={toColor} size={32} />
       <ThemedText type="smallBold" style={styles.grow} numberOfLines={1}>
-        {from} pays {to}
+        {t('{from} pays {to}', { from, to })}
       </ThemedText>
       <ThemedText type="smallBold" numberOfLines={1}>
         {amount}
@@ -31,24 +33,25 @@ function PaymentLine({ from, to, fromColor, toColor, amount }: { from: string; t
 }
 
 function FamilyLine({ name, people, color }: { name: string; people: number; color: string }) {
+  const t = useT();
   return (
     <View style={styles.line}>
       <Avatar name={name} color={color} size={36} />
       <ThemedText type="bold" style={styles.grow}>
-        {name} family
+        {t('{name} family', { name })}
       </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        {people} people
+        {t('{count} people', { count: people })}
       </ThemedText>
     </View>
   );
 }
 
 // Pictures are functions so they are built after the styles at the bottom of this file exist.
-const SLIDES: { title: string; body: string; picture: () => ReactNode }[] = [
+const slides = (t: T): { title: string; body: string; picture: () => ReactNode }[] => [
   {
-    title: 'One trip, several families',
-    body: 'Add every family on the trip and everyone in them, even children and grandparents who never use the app. Travelling with friends instead? Pick a Friends trip and everyone settles with everyone.',
+    title: t('One trip, several families'),
+    body: t('Add every family on the trip and everyone in them, even children and grandparents who never use the app. Travelling with friends instead? Pick a Friends trip and everyone settles with everyone.'),
     picture: () => (
       <>
         <FamilyLine name="Sharma" people={4} color={VIOLET} />
@@ -58,8 +61,8 @@ const SLIDES: { title: string; body: string; picture: () => ReactNode }[] = [
     ),
   },
   {
-    title: 'Family heads settle first',
-    body: 'FamSplit works out a few simple payments between the family heads, so the families square up with each other in one go.',
+    title: t('Family heads settle first'),
+    body: t('FamSplit works out a few simple payments between the family heads, so the families square up with each other in one go.'),
     picture: () => (
       <>
         <PaymentLine from="Venkat" to="Rajesh" fromColor={AMBER} toColor={VIOLET} amount="₹12,520" />
@@ -68,8 +71,8 @@ const SLIDES: { title: string; body: string; picture: () => ReactNode }[] = [
     ),
   },
   {
-    title: 'Then each family settles inside',
-    body: 'Once a head has settled, the family can see what each person owes the head or is owed, without anyone doing the maths.',
+    title: t('Then each family settles inside'),
+    body: t('Once a head has settled, the family can see what each person owes the head or is owed, without anyone doing the maths.'),
     picture: () => (
       <>
         <PaymentLine from="Sunita" to="Rajesh" fromColor={VIOLET} toColor={VIOLET} amount="₹2,554" />
@@ -79,12 +82,12 @@ const SLIDES: { title: string; body: string; picture: () => ReactNode }[] = [
     ),
   },
   {
-    title: 'Share it with a code',
-    body: 'Sign in with Google and send the trip’s invite code. Everyone sees expenses as they are added, on their own phone.',
+    title: t('Share it with a code'),
+    body: t('Sign in with Google and send the trip’s invite code. Everyone sees expenses as they are added, on their own phone.'),
     picture: () => (
       <View style={styles.codeBox}>
         <ThemedText type="caption" themeColor="textSecondary">
-          INVITE CODE
+          {t('INVITE CODE')}
         </ThemedText>
         <ThemedText type="title" style={styles.code}>
           GADE-MXY2
@@ -96,11 +99,13 @@ const SLIDES: { title: string; body: string; picture: () => ReactNode }[] = [
 
 /** Shown once on a phone's first launch, and again from Account → How FamSplit works. */
 export default function WelcomeScreen() {
+  const t = useT();
   const router = useRouter();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const pager = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
+  const SLIDES = slides(t);
   const last = page === SLIDES.length - 1;
 
   // Counts as seen as soon as it opens, so leaving with the back button doesn't bring it back.
@@ -117,12 +122,12 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: theme.primary }]}>
+    <View style={[styles.screen, { backgroundColor: theme.primaryFill }]}>
       <SafeAreaView style={styles.grow}>
         <View style={styles.top}>
           <Pressable accessibilityRole="button" hitSlop={12} onPress={close}>
             <ThemedText type="smallBold" style={styles.skip}>
-              {last ? '' : 'Skip'}
+              {last ? '' : t('Skip')}
             </ThemedText>
           </Pressable>
         </View>
@@ -151,7 +156,7 @@ export default function WelcomeScreen() {
             ))}
           </View>
           <Button
-            label={last ? 'Get started' : 'Next'}
+            label={last ? t('Get started') : t('Next')}
             icon={last ? 'check' : 'arrowForward'}
             variant="soft"
             onPress={next}

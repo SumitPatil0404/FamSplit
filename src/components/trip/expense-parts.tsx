@@ -4,6 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise, type Paise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { cleanAmount } from '@/store/expense-draft';
 
 /** The rounded square with a category's emoji, used wherever an expense is shown. */
@@ -44,11 +45,16 @@ export function MoneyInput({ value, onChange, label }: { value: string; onChange
 
 /** "₹1,750 of ₹2,750 · ₹1,000 left", the running total Splitwise shows while amounts are typed in. */
 export function Tally({ entered, total }: { entered: Paise; total: Paise }) {
+  const t = useT();
   const left = total - entered;
   return (
     <ThemedText type="smallBold" themeColor={left === 0 && total > 0 ? 'positive' : left < 0 ? 'negative' : 'textSecondary'}>
-      {formatPaise(entered)} of {formatPaise(total)} ·{' '}
-      {left === 0 ? 'all accounted for' : left > 0 ? `${formatPaise(left)} left` : `${formatPaise(-left)} too much`}
+      {t('{entered} of {total}', { entered: formatPaise(entered), total: formatPaise(total) })} ·{' '}
+      {left === 0
+        ? t('all accounted for')
+        : left > 0
+          ? t('{amount} left', { amount: formatPaise(left) })
+          : t('{amount} too much', { amount: formatPaise(-left) })}
     </ThemedText>
   );
 }

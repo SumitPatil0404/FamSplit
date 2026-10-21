@@ -3,6 +3,7 @@ import { buildSummaryHtml } from '@/export/summary';
 
 import { describeActivity } from '../activity';
 import { categoryOf, guessCategory } from '../categories';
+import { byCategory, headFlows, spendingScopes } from '../insights';
 import { summarizeTrip } from '../summary';
 import type { ActivityEntry, StoredTrip } from '../trips';
 
@@ -48,8 +49,8 @@ const entry = (partial: Partial<ActivityEntry>): ActivityEntry => ({
 describe('describeActivity', () => {
   it('names who did it, or says Someone when they had not picked themselves', () => {
     const added = { after: { description: 'Dinner', amount: 840000 } };
-    expect(describeActivity(entry(added), trip)).toEqual({ kind: 'added', who: 'Mahesh', what: 'added “Dinner”', detail: '₹8,400' });
-    expect(describeActivity(entry({ ...added, actorMemberId: null }), trip)?.who).toBe('Someone');
+    expect(describeActivity(entry(added), trip)).toEqual({ kind: 'added', who: 'Mahesh', what: 'Mahesh added “Dinner”', detail: '₹8,400' });
+    expect(describeActivity(entry({ ...added, actorMemberId: null }), trip)?.who).toBe('Somebody');
   });
 
   it('spells out what changed in an edited expense', () => {
@@ -61,28 +62,28 @@ describe('describeActivity', () => {
       }),
       trip,
     );
-    expect(line).toEqual({ kind: 'changed', who: 'Mahesh', what: 'changed “Dinner”', detail: '₹8,400 → ₹9,000 · who paid' });
+    expect(line).toEqual({ kind: 'changed', who: 'Mahesh', what: 'Mahesh changed “Dinner”', detail: '₹8,400 → ₹9,000 · who paid' });
   });
 
   it('describes deletions, payments, finalising and people', () => {
     const what = (partial: Partial<ActivityEntry>) => describeActivity(entry(partial), trip)?.what;
-    expect(what({ action: 'removed', before: { description: 'Cab', amount: 45000 } })).toBe('deleted “Cab”');
+    expect(what({ action: 'removed', before: { description: 'Cab', amount: 45000 } })).toBe('Mahesh deleted “Cab”');
     expect(what({ entity: 'payment', after: { from_member_id: 'm3', to_member_id: 'm1', amount: 100 } })).toBe(
-      'marked Mahesh → Rajesh as paid',
+      'Mahesh marked Mahesh → Rajesh as paid',
     );
     expect(what({ entity: 'payment', action: 'removed', before: { from_member_id: 'm3', to_member_id: 'gone', amount: 100 } })).toBe(
-      'undid the payment Mahesh → someone who has left',
+      'Mahesh undid the payment Mahesh → someone who has left',
     );
     expect(what({ entity: 'trip', action: 'changed', before: { finalized_at: null }, after: { finalized_at: '2026-10-05' } })).toBe(
-      'finalised the trip',
+      'Mahesh finalised the trip',
     );
     expect(what({ entity: 'trip', action: 'changed', before: { finalized_at: '2026-10-05' }, after: { finalized_at: null } })).toBe(
-      'reopened the trip',
+      'Mahesh reopened the trip',
     );
     expect(what({ entity: 'family', action: 'changed', before: { name: 'Patel', head_id: 'm3' }, after: { name: 'Patel', head_id: 'm1' } })).toBe(
-      'made Rajesh head of the Patel family',
+      'Mahesh made Rajesh head of the Patel family',
     );
-    expect(what({ entity: 'member', after: { name: 'Dadi', family_id: 'f2' } })).toBe('added Dadi to the Patel family');
+    expect(what({ entity: 'member', after: { name: 'Dadi', family_id: 'f2' } })).toBe('Mahesh added Dadi to the Patel family');
   });
 
   it('tags each line with its kind so the log can colour it', () => {
@@ -197,7 +198,7 @@ describe('friends trips', () => {
 
   it('describes people without families in the log', () => {
     const what = (partial: Partial<ActivityEntry>) => describeActivity(entry(partial), friends)?.what ?? null;
-    expect(what({ entity: 'member', after: { name: 'Dadi', family_id: 'f2' } })).toBe('added Dadi');
+    expect(what({ entity: 'member', after: { name: 'Dadi', family_id: 'f2' } })).toBe('Mahesh added Dadi');
     expect(what({ entity: 'family', after: { name: 'Dadi' } })).toBeNull();
   });
 
@@ -206,5 +207,24 @@ describe('friends trips', () => {
     expect(html).toContain('<h2>People</h2>');
     expect(html).not.toContain('inside each family');
     expect(html).toMatch(/Sunita<\/td><td>Rajesh<\/td><td class="amount">₹3,000/);
+  });
+});
+
+describe('insights', () => {
+  it('adds up spending per category, for the trip or one family’s share', () => {
+    const [all, sharma, patel] = spendingScopes(trip);
+    expect(sharma.label).toBe('Sharma (you)');
+    expect(byCategory(trip, all)).toEqual([expect.objectContaining({ amount: 3600000, count: 1 })]);
+    expect(byCategory(trip, all)[0].category.id).toBe('stay');
+    expect(byCategory(trip, patel)[0].amount).toBe(1800000);
+  });
+
+  it('shows what each head still collects and hands out', () => {
+    const { settlement } = summarizeTrip(trip);
+    // Sunita owes Rajesh half the Sharma share; Mahesh still owes Rajesh ₹8,000 after paying ₹10,000.
+    expect(headFlows(trip, settlement)).toEqual([
+      { familyId: 'f1', headId: 'm1', collectsFromFamily: 900000, handsOutToFamily: 0, receivesFromFamilies: 800000, paysToFamilies: 0 },
+      { familyId: 'f2', headId: 'm3', collectsFromFamily: 0, handsOutToFamily: 0, receivesFromFamilies: 0, paysToFamilies: 800000 },
+    ]);
   });
 });

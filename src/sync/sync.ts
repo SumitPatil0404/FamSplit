@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
+import { msg } from '@/i18n/translate';
 import { registerForPush, startPushListeners, unregisterFromPush } from '@/notifications/push';
 import { applyRemoteTrips, getTrips, setLocalChangeListener, type StoredTrip } from '@/store/trips';
 
@@ -79,16 +80,16 @@ export function useSync(): SyncState {
 
 /** The server's sign-in errors, reworded for someone who is not a developer. */
 const FRIENDLY: [RegExp, string][] = [
-  [/provider is not enabled|unsupported provider/i, 'Google sign-in is not switched on for this app yet.'],
-  [/redirect/i, 'Google sign-in is not fully set up for this app yet.'],
-  [/access[_ ]denied/i, 'Google sign-in was cancelled.'],
-  [/rate limit|too many/i, 'Too many attempts. Wait a few minutes and try again.'],
+  [/provider is not enabled|unsupported provider/i, msg('Google sign-in is not switched on for this app yet.')],
+  [/redirect/i, msg('Google sign-in is not fully set up for this app yet.')],
+  [/access[_ ]denied/i, msg('Google sign-in was cancelled.')],
+  [/rate limit|too many/i, msg('Too many attempts. Wait a few minutes and try again.')],
 ];
 
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String((error as { message?: string })?.message ?? error);
   if (/network|fetch|timed? ?out/i.test(message)) {
-    return 'Can’t reach the server. Changes are saved on this phone and will sync later.';
+    return msg('Can’t reach the server. Changes are saved on this phone and will sync later.');
   }
   return FRIENDLY.find(([pattern]) => pattern.test(message))?.[1] ?? message;
 }
@@ -195,8 +196,8 @@ async function push(client: SupabaseClient, userId: string): Promise<Set<string>
     const problem = sent.find((result) => result.error)?.error;
     if (problem) {
       pushProblem = /column|schema cache/i.test(problem.message)
-        ? 'The database is missing its latest update. Run the newest supabase/update-*.sql file in the Supabase SQL editor.'
-        : 'Some changes could not be saved to the server yet.';
+        ? msg('The database is missing its latest update. Run the newest supabase/update-*.sql file in the Supabase SQL editor.')
+        : msg('Some changes could not be saved to the server yet.');
       failed.add(trip.id);
       continue;
     }
@@ -411,7 +412,7 @@ export function hasUnsentChanges(): boolean {
  */
 export async function signInWithGoogle(): Promise<string | null> {
   if (!supabase) {
-    return 'Sharing is not set up in this build.';
+    return msg('Sharing is not set up in this build.');
   }
   // Ask first whether Google sign-in is switched on, so a half-configured project gives a clear
   // message here instead of a page of error text in the browser.
@@ -420,7 +421,7 @@ export async function signInWithGoogle(): Promise<string | null> {
       headers: { apikey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '' },
     });
     if (settings.ok && (await settings.json()).external?.google === false) {
-      return 'Google sign-in is not switched on for this app yet.';
+      return msg('Google sign-in is not switched on for this app yet.');
     }
   } catch {
     return describe('Network request failed');
@@ -433,7 +434,7 @@ export async function signInWithGoogle(): Promise<string | null> {
     options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
   });
   if (error || !data.url) {
-    return describe(error ?? 'Google sign-in could not be started.');
+    return describe(error ?? msg('Google sign-in could not be started.'));
   }
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
@@ -452,7 +453,7 @@ export async function signInWithGoogle(): Promise<string | null> {
   const accessToken = answer.get('access_token');
   const refreshToken = answer.get('refresh_token');
   if (!accessToken || !refreshToken) {
-    return 'Google sign-in did not finish. Please try again.';
+    return msg('Google sign-in did not finish. Please try again.');
   }
   const session = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
   return session.error ? describe(session.error) : null;
@@ -474,7 +475,7 @@ export async function signOut() {
 /** Joins the trip behind an invite code and returns its id. Throws with a readable message. */
 export async function joinTrip(code: string): Promise<string> {
   if (!supabase || !state.session) {
-    throw new Error('Sign in first to join a trip.');
+    throw new Error(msg('Sign in first to join a trip.'));
   }
   const { data, error } = await supabase.rpc('join_trip', { code });
   if (error) {
@@ -526,13 +527,13 @@ export async function sendReminder(
  */
 export async function deleteAccount(): Promise<string | null> {
   if (!supabase || !state.session) {
-    return 'You are not signed in.';
+    return msg('You are not signed in.');
   }
   const { error } = await supabase.functions.invoke('delete-account', { method: 'POST' });
   if (error) {
     return /network|fetch|failed to send/i.test(error.message)
-      ? 'Can’t reach the server. Check your connection and try again.'
-      : 'The account could not be deleted. Please try again.';
+      ? msg('Can’t reach the server. Check your connection and try again.')
+      : msg('The account could not be deleted. Please try again.');
   }
   // The server-side session went with the account, so only this phone is left to clear.
   await supabase.auth.signOut({ scope: 'local' });

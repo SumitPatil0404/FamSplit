@@ -6,6 +6,7 @@ import { Avatar, BalancePill, Button, Card, IconButton, Tag } from '@/components
 import { Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import type { TripSummary } from '@/store/summary';
 import { formatInviteCode, isFriendsTrip, type StoredTrip } from '@/store/trips';
 import { isShared, useSync } from '@/sync/sync';
@@ -23,7 +24,8 @@ type Props = {
 function InviteCard({ trip }: { trip: StoredTrip }) {
   const router = useRouter();
   const sync = useSync();
-  const title = isFriendsTrip(trip) ? 'Invite your friends' : 'Invite the other families';
+  const t = useT();
+  const title = isFriendsTrip(trip) ? t('Invite your friends') : t('Invite the other families');
 
   if (!sync.configured) {
     return null;
@@ -33,9 +35,9 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
       <Card>
         <ThemedText type="bold">{title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Sign in to get a code they can join this trip with.
+          {t('Sign in to get a code they can join this trip with.')}
         </ThemedText>
-        <Button label="Sign in" variant="soft" compact onPress={() => router.push('/account')} style={styles.start} />
+        <Button label={t('Sign in')} variant="soft" compact onPress={() => router.push('/account')} style={styles.start} />
       </Card>
     );
   }
@@ -44,7 +46,7 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
       <Card>
         <ThemedText type="bold">{title}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {sync.error ?? 'Uploading this trip. The invite code appears in a moment.'}
+          {sync.error ? t(sync.error) : t('Uploading this trip. The invite code appears in a moment.')}
         </ThemedText>
       </Card>
     );
@@ -53,20 +55,20 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
   const code = formatInviteCode(trip.inviteCode);
   const share = () =>
     Share.share({
-      message: `Join "${trip.name}" on FamSplit. Open the app, tap "Join with a code" and enter ${code}`,
+      message: t('Join "{name}" on FamSplit. Open the app, tap "Join with a code" and enter {code}', { name: trip.name, code }),
     });
 
   return (
     <Card>
       <ThemedText type="bold">{title}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
-        Anyone with this code can join the trip and add expenses.
+        {t('Anyone with this code can join the trip and add expenses.')}
       </ThemedText>
       <View style={[styles.row, styles.spread]}>
         <ThemedText type="heading" selectable style={styles.code}>
           {code}
         </ThemedText>
-        <Button label="Share" icon="share" variant="soft" compact onPress={() => void share()} />
+        <Button label={t('Share')} icon="share" variant="soft" compact onPress={() => void share()} />
       </View>
     </Card>
   );
@@ -74,12 +76,13 @@ function InviteCard({ trip }: { trip: StoredTrip }) {
 
 export function FamiliesTab({ trip, summary, finalised, onAddFamily, onEditFamily, onChooseMe }: Props) {
   const theme = useTheme();
+  const t = useT();
 
   return (
     <View style={styles.list}>
       <InviteCard trip={trip} />
       <ThemedText type="caption" themeColor="textSecondary">
-        Each amount is what that person paid minus their share
+        {t('Each amount is what that person paid minus their share')}
       </ThemedText>
 
       {trip.families.map((family) => {
@@ -89,15 +92,15 @@ export function FamiliesTab({ trip, summary, finalised, onAddFamily, onEditFamil
             <View style={styles.row}>
               <Avatar name={family.name} color={family.color} size={44} />
               <View style={styles.grow}>
-                <ThemedText type="bold">{family.name} family</ThemedText>
+                <ThemedText type="bold">{t('{name} family', { name: family.name })}</ThemedText>
                 <BalancePill
                   amount={summary.settlement.familyNets.get(family.id) ?? 0}
-                  positive="Gets back"
-                  negative="Owes"
-                  settled="Settled"
+                  positive={t('Gets back {amount}')}
+                  negative={t('Owes {amount}')}
+                  settled={t('Settled')}
                 />
               </View>
-              <IconButton icon="edit" label={`Edit ${family.name} family`} onPress={() => onEditFamily(family.id)} />
+              <IconButton icon="edit" label={t('Edit {name} family', { name: family.name })} onPress={() => onEditFamily(family.id)} />
             </View>
 
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
@@ -109,8 +112,8 @@ export function FamiliesTab({ trip, summary, finalised, onAddFamily, onEditFamil
                   <Avatar name={member.name} color={family.color} size={30} />
                   <View style={[styles.grow, styles.nameRow]}>
                     <ThemedText>{member.name}</ThemedText>
-                    {member.id === family.headId && <Tag label="Head" />}
-                    {member.id === trip.meId && <Tag label="You" />}
+                    {member.id === family.headId && <Tag label={t('Head')} />}
+                    {member.id === trip.meId && <Tag label={t('You')} />}
                   </View>
                   <ThemedText
                     type="smallBold"
@@ -125,10 +128,10 @@ export function FamiliesTab({ trip, summary, finalised, onAddFamily, onEditFamil
         );
       })}
 
-      {!finalised && <Button label="Add a family" icon="groupAdd" variant="soft" onPress={onAddFamily} />}
+      {!finalised && <Button label={t('Add a family')} icon="groupAdd" variant="soft" onPress={onAddFamily} />}
       <Pressable accessibilityRole="button" hitSlop={8} onPress={onChooseMe} style={styles.link}>
         <ThemedText type="smallBold" themeColor="primary">
-          {trip.meId ? 'Not you? Change who you are' : 'Tell us which one is you'}
+          {trip.meId ? t('Not you? Change who you are') : t('Tell us which one is you')}
         </ThemedText>
       </Pressable>
     </View>
@@ -146,13 +149,14 @@ type PeopleProps = {
 
 /** A friends trip's version of the Families tab: one list of people. */
 export function PeopleTab({ trip, summary, finalised, onAddPerson, onEditPerson, onChooseMe }: PeopleProps) {
+  const t = useT();
   const colorOf = (familyId: string) => trip.families.find((family) => family.id === familyId)?.color ?? '#8E8CA3';
 
   return (
     <View style={styles.list}>
       <InviteCard trip={trip} />
       <ThemedText type="caption" themeColor="textSecondary">
-        Each amount is what that person paid minus their share
+        {t('Each amount is what that person paid minus their share')}
       </ThemedText>
 
       <Card style={styles.people}>
@@ -162,24 +166,24 @@ export function PeopleTab({ trip, summary, finalised, onAddPerson, onEditPerson,
             <View style={styles.grow}>
               <View style={styles.nameRow}>
                 <ThemedText type="bold">{member.name}</ThemedText>
-                {member.id === trip.meId && <Tag label="You" />}
+                {member.id === trip.meId && <Tag label={t('You')} />}
               </View>
               <BalancePill
                 amount={summary.settlement.memberNets.get(member.id) ?? 0}
-                positive="Gets back"
-                negative="Owes"
-                settled="Settled"
+                positive={t('Gets back {amount}')}
+                negative={t('Owes {amount}')}
+                settled={t('Settled')}
               />
             </View>
-            <IconButton icon="edit" label={`Edit ${member.name}`} onPress={() => onEditPerson(member.id)} />
+            <IconButton icon="edit" label={t('Edit {name}', { name: member.name })} onPress={() => onEditPerson(member.id)} />
           </View>
         ))}
       </Card>
 
-      {!finalised && <Button label="Add people" icon="personAdd" variant="soft" onPress={onAddPerson} />}
+      {!finalised && <Button label={t('Add people')} icon="personAdd" variant="soft" onPress={onAddPerson} />}
       <Pressable accessibilityRole="button" hitSlop={8} onPress={onChooseMe} style={styles.link}>
         <ThemedText type="smallBold" themeColor="primary">
-          {trip.meId ? 'Not you? Change who you are' : 'Tell us which one is you'}
+          {trip.meId ? t('Not you? Change who you are') : t('Tell us which one is you')}
         </ThemedText>
       </Pressable>
     </View>

@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 
 export type DialogOptions = {
   title: string;
@@ -45,6 +46,7 @@ export function confirmDialog(options: DialogOptions) {
 /** Mounted once at the root; shows whatever confirmDialog() was last asked for. */
 export function DialogHost() {
   const theme = useTheme();
+  const t = useT();
   const dialog = useSyncExternalStore(subscribe, getCurrent, getCurrent);
   const close = () => set(null);
 
@@ -60,7 +62,7 @@ export function DialogHost() {
 
   return (
     <Modal transparent visible animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
-      <Pressable accessibilityLabel="Close" onPress={close} style={styles.backdrop}>
+      <Pressable accessibilityLabel={t('Close')} onPress={close} style={styles.backdrop}>
         {/* Swallows taps so pressing the card itself does not close it. */}
         <Pressable accessibilityRole="alert" onPress={() => {}} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
           {dialog.icon && (
@@ -78,7 +80,7 @@ export function DialogHost() {
           )}
           <View style={styles.actions}>
             <Button label={dialog.confirmLabel} variant={danger ? 'destructive' : 'primary'} onPress={confirm} />
-            {!dialog.hideCancel && <Button label={dialog.cancelLabel ?? 'Cancel'} variant="soft" onPress={close} />}
+            {!dialog.hideCancel && <Button label={dialog.cancelLabel ?? t('Cancel')} variant="soft" onPress={close} />}
           </View>
         </Pressable>
       </Pressable>

@@ -5,6 +5,7 @@ import { useSyncExternalStore } from 'react';
 import { FamilyColors } from '@/constants/theme';
 import { sampleTrip } from '@/data/sample-trip';
 import type { Expense, Family, Member, Payment } from '@/domain';
+import { englishT, type T } from '@/i18n/translate';
 
 import { isFriendsTrip, type TripKind } from './trip-kind';
 
@@ -364,7 +365,7 @@ export type PersonGroup = {
 };
 
 /** People as the screens list them: by family, or all together on a friends trip. */
-export function personGroups(trip: StoredTrip): PersonGroup[] {
+export function personGroups(trip: StoredTrip, t: T = englishT): PersonGroup[] {
   const colorOf = (familyId: string) => trip.families.find((family) => family.id === familyId)?.color ?? FamilyColors[0];
   if (isFriendsTrip(trip)) {
     return [
@@ -378,7 +379,7 @@ export function personGroups(trip: StoredTrip): PersonGroup[] {
   }
   return trip.families.map((family) => ({
     id: family.id,
-    title: `${family.name} family`,
+    title: t('{name} family', { name: family.name }),
     color: family.color,
     members: trip.members.filter((member) => member.familyId === family.id).map((member) => ({ ...member, color: family.color })),
   }));

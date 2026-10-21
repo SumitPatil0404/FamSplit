@@ -1,15 +1,16 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '@/components/icon';
+import { Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { CategoryTile } from '@/components/trip/expense-parts';
 import { Avatar, Button, Card, EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import {
   cleanAmount,
   payerLabel,
@@ -20,10 +21,21 @@ import {
   useDraft,
   type ExpenseDraft,
 } from '@/store/expense-draft';
+import { relativeDay } from '@/store/summary';
 import { isFriendsTrip, newId, saveExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
 
 /** A tappable word in the "Paid by … and split …" sentence. */
-function Choice({ label, onPress, accessibilityLabel }: { label: string; onPress: () => void; accessibilityLabel: string }) {
+function Choice({
+  label,
+  onPress,
+  accessibilityLabel,
+  icon,
+}: {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+  icon?: IconName;
+}) {
   const theme = useTheme();
   return (
     <Pressable
@@ -31,6 +43,7 @@ function Choice({ label, onPress, accessibilityLabel }: { label: string; onPress
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       style={({ pressed }) => [styles.choice, { backgroundColor: theme.primarySoft, opacity: pressed ? 0.7 : 1 }]}>
+      {icon && <Icon name={icon} size={16} color={theme.primary} />}
       <ThemedText type="bold" numberOfLines={1} themeColor="primary">
         {label}
       </ThemedText>
@@ -40,19 +53,26 @@ function Choice({ label, onPress, accessibilityLabel }: { label: string; onPress
 }
 
 function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: StoredExpense; draft: ExpenseDraft }) {
+  const t = useT();
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { amount, category, paidBy, split, preview, problem } = readDraft(draft, trip);
+  const { amount, category, paidBy, split, preview, problem } = readDraft(draft, trip, t);
 
-  const open = (pathname: '/trip/[tripId]/expense-category' | '/trip/[tripId]/expense-payer' | '/trip/[tripId]/expense-split') =>
+  const open = (
+    pathname:
+      | '/trip/[tripId]/expense-category'
+      | '/trip/[tripId]/expense-payer'
+      | '/trip/[tripId]/expense-split'
+      | '/trip/[tripId]/expense-date',
+  ) =>
     router.push({ pathname, params: { tripId: trip.id } });
 
   const save = () => {
     saveExpense(trip.id, {
       id: existing?.id ?? newId('exp'),
-      date: existing?.date ?? new Date().toISOString(),
-      description: draft.description.trim() || category.label,
+      date: draft.date,
+      description: draft.description.trim() || t(category.label),
       category: category.id,
       amount,
       paidBy,
@@ -75,24 +95,24 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
 
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
-      <Stack.Screen options={{ title: existing ? 'Edit expense' : 'Add expense' }} />
+      <Stack.Screen options={{ title: existing ? t('Edit expense') : t('Add expense') }} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.inputs}>
           <View style={styles.inputRow}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Category: ${category.label}. Change category`}
+              accessibilityLabel={t('Category: {name}. Change category', { name: t(category.label) })}
               onPress={() => open('/trip/[tripId]/expense-category')}>
               <CategoryTile emoji={category.emoji} size={56} />
-              <View style={[styles.editBadge, { backgroundColor: theme.primary, borderColor: theme.background }]}>
+              <View style={[styles.editBadge, { backgroundColor: theme.primaryFill, borderColor: theme.background }]}>
                 <Icon name="edit" size={12} color={theme.onPrimary} />
               </View>
             </Pressable>
             <TextInput
-              accessibilityLabel="What was it for?"
+              accessibilityLabel={t('What was it for?')}
               value={draft.description}
               onChangeText={(description) => updateDraft({ description })}
-              placeholder="What was it for?"
+              placeholder={t('What was it for?')}
               placeholderTextColor={theme.textSecondary}
               autoFocus={!existing}
               returnKeyType="next"
@@ -107,7 +127,7 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
               </ThemedText>
             </View>
             <TextInput
-              accessibilityLabel="Total amount"
+              accessibilityLabel={t('Total amount')}
               value={draft.amountText}
               onChangeText={(text) => updateDraft({ amountText: cleanAmount(text) })}
               placeholder="0.00"
@@ -119,30 +139,38 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
         </View>
 
         <View style={styles.sentence}>
-          <ThemedText type="bold">Paid by</ThemedText>
+          <ThemedText type="bold">{t('Paid by')}</ThemedText>
           <Choice
-            label={payerLabel(draft, trip, paidBy)}
-            accessibilityLabel="Change who paid"
+            label={payerLabel(draft, trip, paidBy, t)}
+            accessibilityLabel={t('Change who paid')}
             onPress={() => open('/trip/[tripId]/expense-payer')}
           />
-          <ThemedText type="bold">and split</ThemedText>
+          <ThemedText type="bold">{t('and split')}</ThemedText>
           <Choice
-            label={splitLabel(draft, trip)}
-            accessibilityLabel="Change how it is split"
+            label={splitLabel(draft, trip, t)}
+            accessibilityLabel={t('Change how it is split')}
             onPress={() => open('/trip/[tripId]/expense-split')}
+          />
+        </View>
+        <View style={styles.dateRow}>
+          <Choice
+            icon="calendar"
+            label={relativeDay(draft.date, t)}
+            accessibilityLabel={t('Date: {date}. Change date', { date: relativeDay(draft.date, t) })}
+            onPress={() => open('/trip/[tripId]/expense-date')}
           />
         </View>
 
         {preview && familyShares.length > 0 && (
           <Card style={styles.shares}>
             <ThemedText type="caption" themeColor="textSecondary">
-              {friends ? 'EACH PERSON’S SHARE' : 'EACH FAMILY’S SHARE'}
+              {friends ? t('EACH PERSON’S SHARE') : t('EACH FAMILY’S SHARE')}
             </ThemedText>
             {familyShares.map(({ family, share }) => (
               <View key={family.id} style={styles.shareRow}>
                 <Avatar name={family.name} color={family.color} size={28} />
                 <ThemedText style={styles.grow} numberOfLines={1}>
-                  {friends ? family.name : `${family.name} family`}
+                  {friends ? family.name : t('{name} family', { name: family.name })}
                 </ThemedText>
                 <ThemedText type="smallBold">{formatPaise(share)}</ThemedText>
               </View>
@@ -157,7 +185,7 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
             {problem}
           </ThemedText>
         )}
-        <Button label={existing ? 'Save changes' : 'Save expense'} icon="check" onPress={save} disabled={problem !== null} />
+        <Button label={existing ? t('Save changes') : t('Save expense')} icon="check" onPress={save} disabled={problem !== null} />
       </View>
     </KeyboardAvoidingView>
   );
@@ -165,20 +193,28 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
 
 function ExpenseEditor({ trip, existing }: { trip: StoredTrip; existing?: StoredExpense }) {
   // The draft is started once when this page opens; the category, payer and split pages share it.
-  useState(() => startDraft(trip, existing));
+  useState(() => startDraft(trip, existing, false));
   const draft = useDraft();
-  if (!draft || draft.tripId !== trip.id || draft.expenseId !== existing?.id) {
+  const current = draft !== null && draft.tripId === trip.id && draft.expenseId === existing?.id;
+  // A reload during development clears the draft; start it again rather than show an empty page.
+  useEffect(() => {
+    if (!current) {
+      startDraft(trip, existing);
+    }
+  }, [current, trip, existing]);
+  if (!current || !draft) {
     return null;
   }
   return <ExpenseForm trip={trip} existing={existing} draft={draft} />;
 }
 
 export default function ExpenseScreen() {
+  const t = useT();
   const { tripId, expenseId } = useLocalSearchParams<{ tripId: string; expenseId?: string }>();
   const trip = useTrip(tripId);
 
   if (!trip) {
-    return <EmptyState emoji="🤔" title="Trip not found" body="It may have been deleted from this phone." />;
+    return <EmptyState emoji="🤔" title={t('Trip not found')} body={t('It may have been deleted from this phone.')} />;
   }
   return <ExpenseEditor trip={trip} existing={trip.expenses.find((expense) => expense.id === expenseId)} />;
 }
@@ -242,6 +278,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
+  },
+  dateRow: {
+    alignItems: 'center',
+    marginTop: -Spacing.three,
   },
   choice: {
     flexDirection: 'row',

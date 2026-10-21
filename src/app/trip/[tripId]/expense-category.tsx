@@ -5,11 +5,13 @@ import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { CATEGORIES } from '@/store/categories';
 import { readDraft, updateDraft, useDraft } from '@/store/expense-draft';
 import { useTrip } from '@/store/trips';
 
 export default function CategoryScreen() {
+  const t = useT();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -17,7 +19,7 @@ export default function CategoryScreen() {
   const draft = useDraft();
 
   if (!trip || !draft) {
-    return <EmptyState emoji="🤔" title="Nothing to choose for" body="Go back and start the expense again." />;
+    return <EmptyState emoji="🤔" title={t('Nothing to choose for')} body={t('Go back and start the expense again.')} />;
   }
   const current = readDraft(draft, trip).category;
 
@@ -35,7 +37,7 @@ export default function CategoryScreen() {
             <Pressable
               key={category.id}
               accessibilityRole="radio"
-              accessibilityLabel={category.label}
+              accessibilityLabel={t(category.label)}
               accessibilityState={{ selected }}
               onPress={() => choose(category.id)}
               style={({ pressed }) => [
@@ -54,7 +56,7 @@ export default function CategoryScreen() {
                 numberOfLines={2}
                 themeColor={selected ? 'primary' : 'text'}
                 style={styles.label}>
-                {category.label}
+                {t(category.label)}
               </ThemedText>
             </Pressable>
           );

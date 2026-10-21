@@ -8,17 +8,19 @@ import { Avatar, Button, Card, Checkbox, EmptyState, IconButton, Segmented } fro
 import { Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
+import { plural, useT, type T } from '@/i18n';
 import { readDraft, sum, updateDraft, useDraft, type SplitMode } from '@/store/expense-draft';
 import { isFriendsTrip, personGroups, useTrip } from '@/store/trips';
 
-const HINTS: Record<SplitMode, string> = {
-  equal: 'Everyone ticked pays the same amount.',
-  perFamily: 'Each family ticked pays the same, whatever its size.',
-  shares: 'Give children or light eaters a smaller share, like 0.5.',
-  exact: 'Enter exactly what each person owes.',
-};
+const hints = (t: T): Record<SplitMode, string> => ({
+  equal: t('Everyone ticked pays the same amount.'),
+  perFamily: t('Each family ticked pays the same, whatever its size.'),
+  shares: t('Give children or light eaters a smaller share, like 0.5.'),
+  exact: t('Enter exactly what each person owes.'),
+});
 
 export default function SplitScreen() {
+  const t = useT();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
   const theme = useTheme();
@@ -27,9 +29,9 @@ export default function SplitScreen() {
   const draft = useDraft();
 
   if (!trip || !draft) {
-    return <EmptyState emoji="🤔" title="Nothing to split" body="Go back and start the expense again." />;
+    return <EmptyState emoji="🤔" title={t('Nothing to split')} body={t('Go back and start the expense again.')} />;
   }
-  const { amount, exactAmounts, preview, splitProblem } = readDraft(draft, trip);
+  const { amount, exactAmounts, preview, splitProblem } = readDraft(draft, trip, t);
   const { memberOn, familyOn, shares, exactTexts } = draft;
   const membersOf = (familyId: string) => trip.members.filter((member) => member.familyId === familyId);
   const shareOf = (memberId: string) => {
@@ -41,20 +43,20 @@ export default function SplitScreen() {
     <KeyboardAvoidingView behavior="padding" style={styles.grow}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <ThemedText type="heading" style={styles.centered}>
-          {amount > 0 ? formatPaise(amount) : 'No amount yet'}
+          {amount > 0 ? formatPaise(amount) : t('No amount yet')}
         </ThemedText>
         <Segmented
           value={draft.mode}
           onChange={(mode) => updateDraft({ mode })}
           options={[
-            { value: 'equal', label: 'Per person' },
-            ...(isFriendsTrip(trip) ? [] : [{ value: 'perFamily' as const, label: 'Per family' }]),
-            { value: 'shares', label: 'Shares' },
-            { value: 'exact', label: 'Exact' },
+            { value: 'equal', label: t('Per person') },
+            ...(isFriendsTrip(trip) ? [] : [{ value: 'perFamily' as const, label: t('Per family') }]),
+            { value: 'shares', label: t('Shares') },
+            { value: 'exact', label: t('Exact') },
           ]}
         />
         <ThemedText type="small" themeColor="textSecondary">
-          {HINTS[draft.mode]}
+          {hints(t)[draft.mode]}
         </ThemedText>
         {draft.mode === 'exact' && <Tally entered={sum(exactAmounts)} total={amount} />}
 
@@ -72,9 +74,9 @@ export default function SplitScreen() {
                   <Checkbox checked={familyOn[family.id]} />
                   <Avatar name={family.name} color={family.color} size={32} />
                   <View style={styles.grow}>
-                    <ThemedText type="bold">{family.name} family</ThemedText>
+                    <ThemedText type="bold">{t('{name} family', { name: family.name })}</ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
-                      {members.length === 1 ? '1 person' : `${members.length} people`}
+                      {plural(t, members.length, '{count} person', '{count} people')}
                     </ThemedText>
                   </View>
                   <ThemedText type="smallBold" numberOfLines={1}>
@@ -86,7 +88,7 @@ export default function SplitScreen() {
           })}
 
         {draft.mode !== 'perFamily' &&
-          personGroups(trip).map((group) => {
+          personGroups(trip, t).map((group) => {
             const members = group.members;
             const allOn = members.every((member) => memberOn[member.id]);
             return (
@@ -101,11 +103,11 @@ export default function SplitScreen() {
                   style={styles.row}>
                   {group.title && <Avatar name={group.title} color={group.color} size={32} />}
                   <ThemedText type="bold" style={styles.grow}>
-                    {group.title ?? 'Everyone'}
+                    {group.title ?? t('Everyone')}
                   </ThemedText>
                   {draft.mode === 'equal' && (
                     <ThemedText type="smallBold" numberOfLines={1} themeColor="primary">
-                      {allOn ? 'Clear' : 'Select all'}
+                      {allOn ? t('Clear') : t('Select all')}
                     </ThemedText>
                   )}
                 </Pressable>
@@ -134,7 +136,7 @@ export default function SplitScreen() {
                       </View>
                       <IconButton
                         icon="remove"
-                        label={`Smaller share for ${member.name}`}
+                        label={t('Smaller share for {name}', { name: member.name })}
                         onPress={() =>
                           updateDraft({ shares: { ...shares, [member.id]: Math.max(0, shares[member.id] - 0.5) } })
                         }
@@ -144,7 +146,7 @@ export default function SplitScreen() {
                       </ThemedText>
                       <IconButton
                         icon="add"
-                        label={`Bigger share for ${member.name}`}
+                        label={t('Bigger share for {name}', { name: member.name })}
                         onPress={() =>
                           updateDraft({ shares: { ...shares, [member.id]: Math.min(5, shares[member.id] + 0.5) } })
                         }
@@ -154,7 +156,7 @@ export default function SplitScreen() {
                     <View key={member.id} style={[styles.row, styles.memberRow]}>
                       <ThemedText style={styles.grow}>{member.name}</ThemedText>
                       <MoneyInput
-                        label={`Owed by ${member.name}`}
+                        label={t('Owed by {name}', { name: member.name })}
                         value={exactTexts[member.id] ?? ''}
                         onChange={(text) => updateDraft({ exactTexts: { ...exactTexts, [member.id]: text } })}
                       />
@@ -176,7 +178,7 @@ export default function SplitScreen() {
             {splitProblem}
           </ThemedText>
         )}
-        <Button label="Done" icon="check" onPress={() => router.back()} />
+        <Button label={t('Done')} icon="check" onPress={() => router.back()} />
       </View>
     </KeyboardAvoidingView>
   );

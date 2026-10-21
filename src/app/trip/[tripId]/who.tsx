@@ -4,15 +4,17 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Avatar, Button, Card, Checkbox, EmptyState, Tag } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 import { isFriendsTrip, setMe, useTrip } from '@/store/trips';
 
 export default function WhoScreen() {
+  const t = useT();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
   const trip = useTrip(tripId);
 
   if (!trip) {
-    return <EmptyState emoji="🤔" title="Trip not found" body="It may have been deleted from this phone." />;
+    return <EmptyState emoji="🤔" title={t('Trip not found')} body={t('It may have been deleted from this phone.')} />;
   }
 
   const choose = (memberId: string) => {
@@ -25,7 +27,7 @@ export default function WhoScreen() {
       {isFriendsTrip(trip) ? (
         <>
           <ThemedText type="small" themeColor="textSecondary">
-            Pick yourself so the app can show what you owe or get back. Not on the list? Add yourself below.
+            {t('Pick yourself so the app can show what you owe or get back. Not on the list? Add yourself below.')}
           </ThemedText>
           <Card>
             {trip.members.map((member) => (
@@ -42,7 +44,7 @@ export default function WhoScreen() {
           </Card>
           {!trip.finalizedAt && (
             <Button
-              label="I’m not on the list, add me"
+              label={t('I’m not on the list, add me')}
               icon="personAdd"
               variant="soft"
               onPress={() => router.replace({ pathname: '/trip/[tripId]/person', params: { tripId: trip.id, asMe: '1' } })}
@@ -51,8 +53,9 @@ export default function WhoScreen() {
         </>
       ) : (
         <ThemedText type="small" themeColor="textSecondary">
-          Pick yourself so the app can show what your family owes or gets back. If you are not listed, add yourself to
-          your family under Families first.
+          {t(
+            'Pick yourself so the app can show what your family owes or gets back. If you are not listed, add yourself to your family under Families first.',
+          )}
         </ThemedText>
       )}
       {!isFriendsTrip(trip) && trip.families.map((family) => (
@@ -72,7 +75,7 @@ export default function WhoScreen() {
                 style={[styles.row, styles.member]}>
                 <Checkbox checked={member.id === trip.meId} />
                 <ThemedText style={styles.grow}>{member.name}</ThemedText>
-                {member.id === family.headId && <Tag label="Head" />}
+                {member.id === family.headId && <Tag label={t('Head')} />}
               </Pressable>
             ))}
         </Card>
