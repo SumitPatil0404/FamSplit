@@ -4,7 +4,6 @@ import { expenseShares, toPaise, type Paise, type Split } from '@/domain';
 import { englishT, plural, type T } from '@/i18n/translate';
 
 import { CATEGORIES, guessCategory, type Category } from './categories';
-import { expenseDescription, paidOn, type DetectedPayment } from './detected-match';
 import type { PersonalExpense } from './personal';
 import type { StoredExpense, StoredTrip } from './trips';
 
@@ -33,8 +32,6 @@ export type ExpenseDraft = {
   familyOn: Record<string, boolean>;
   shares: Record<string, number>;
   exactTexts: Record<string, string>;
-  /** The bank payment this expense was started from, marked as added once it is saved. */
-  alertId?: string;
 };
 
 let draft: ExpenseDraft | null = null;
@@ -71,20 +68,18 @@ function toTexts(amounts: Record<string, Paise>): Record<string, string> {
 }
 
 /**
- * A fresh draft for a new expense, one filled in from an expense being edited, or one filled in from
- * a bank payment. While a page is rendering it must not notify other components, so it passes
- * `notify: false`.
+ * A fresh draft for a new expense, or one filled in from an expense being edited. While a page is
+ * rendering it must not notify other components, so it passes `notify: false`.
  */
-export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true, payment?: DetectedPayment) {
+export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true) {
   const payers = existing ? Object.keys(existing.paidBy).filter((id) => existing.paidBy[id] > 0) : [];
   const split = existing?.split;
   set({
     tripId: trip.id,
     expenseId: existing?.id,
-    alertId: existing ? undefined : payment?.id,
-    amountText: existing ? String(existing.amount / 100) : payment ? String(payment.amount / 100) : '',
-    date: existing?.date ?? (payment ? paidOn(payment) : new Date().toISOString()),
-    description: existing?.description ?? (payment ? expenseDescription(payment) : ''),
+    amountText: existing ? String(existing.amount / 100) : '',
+    date: existing?.date ?? new Date().toISOString(),
+    description: existing?.description ?? '',
     categoryId: existing?.category,
     payerId: existing ? (payers.length > 1 ? SEVERAL : payers[0]) : trip.meId || (trip.members[0]?.id ?? ''),
     paidTexts: existing && payers.length > 1 ? toTexts(existing.paidBy) : {},
@@ -106,14 +101,13 @@ export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = 
  * A draft for a personal expense, which has no trip: only the amount, description, category and
  * date are used, so the category and date pages work the same as for a trip expense.
  */
-export function startPersonalDraft(existing?: PersonalExpense, payment?: DetectedPayment, notify = true) {
+export function startPersonalDraft(existing?: PersonalExpense, notify = true) {
   set({
     tripId: '',
     expenseId: existing?.id,
-    alertId: existing ? undefined : payment?.id,
-    amountText: existing ? String(existing.amount / 100) : payment ? String(payment.amount / 100) : '',
-    date: existing?.date ?? (payment ? paidOn(payment) : new Date().toISOString()),
-    description: existing?.description ?? (payment ? expenseDescription(payment) : ''),
+    amountText: existing ? String(existing.amount / 100) : '',
+    date: existing?.date ?? new Date().toISOString(),
+    description: existing?.description ?? '',
     categoryId: existing?.category,
     payerId: '',
     paidTexts: {},

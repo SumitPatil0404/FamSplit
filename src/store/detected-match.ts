@@ -1,6 +1,7 @@
 import { settleTrip, type BankAlert, type Transfer } from '@/domain';
 
-import type { StoredTrip } from './trips';
+import { guessCategory } from './categories';
+import type { StoredExpense, StoredTrip } from './trips';
 
 /** A payment picked up from a bank or UPI alert. It stays on this phone and is never synced. */
 export type DetectedPayment = BankAlert & {
@@ -14,6 +15,8 @@ export type DetectedPayment = BankAlert & {
   status: 'new' | 'added' | 'dismissed';
   /** The trip it was added to, or PERSONAL. */
   tripId?: string;
+  /** What adding it created: the trip expense, the settle-up payment or the personal expense, so it can be put back. */
+  createdId?: string;
 };
 
 /** In place of a trip id: the bank payment became a personal expense. */
@@ -69,11 +72,6 @@ export function nameFromUpiId(upiId: string): string {
     .join(' ');
 }
 
-/** What an expense from this alert is called to begin with: the payee, or a name from their UPI ID. */
-export function expenseDescription(payment: DetectedPayment): string {
-  return payment.party ?? (payment.upiId ? nameFromUpiId(payment.upiId) : '');
-}
-
 /** The day an expense from this alert is dated: the day the bank gives, or the day it was seen. */
 export function paidOn(payment: DetectedPayment): string {
   if (!payment.date) {
@@ -82,6 +80,37 @@ export function paidOn(payment: DetectedPayment): string {
   const [year, month, day] = payment.date.split('-').map(Number);
   // Midday, so the day does not change in any time zone.
   return new Date(year, month - 1, day, 12).toISOString();
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Open trips this payment could be added to, best fit first: trips whose expenses span its date
+ * (a day either side), then the trip used most recently. Only trips where this phone has said who
+ * it is, since the expense is paid by them.
+ */
+export function tripsFor(payment: DetectedPayment, trips: StoredTrip[]): StoredTrip[] {
+  const when = Date.parse(paidOn(payment));
+  const dates = (trip: StoredTrip) => trip.expenses.map((expense) => Date.parse(expense.date));
+  const covers = (trip: StoredTrip) =>
+    trip.expenses.length > 0 && when >= Math.min(...dates(trip)) - DAY_MS && when <= Math.max(...dates(trip)) + DAY_MS;
+  const lastUsed = (trip: StoredTrip) => Math.max(Date.parse(trip.createdAt), ...dates(trip));
+  return trips
+    .filter((trip) => !trip.finalizedAt && trip.members.some((member) => member.id === trip.meId))
+    .sort((a, b) => Number(covers(b)) - Number(covers(a)) || lastUsed(b) - lastUsed(a));
+}
+
+/** The expense a one-tap "add to trip" creates: paid by this phone's owner, split equally among everyone. */
+export function tripExpenseFrom(payment: DetectedPayment, trip: StoredTrip, id: string, description: string): StoredExpense {
+  return {
+    id,
+    date: paidOn(payment),
+    description,
+    category: guessCategory(description).id,
+    amount: payment.amount,
+    paidBy: { [trip.meId]: payment.amount },
+    split: { type: 'equal', memberIds: trip.members.map((member) => member.id) },
+  };
 }
 
 export type SettleUpMatch = {

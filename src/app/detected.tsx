@@ -8,53 +8,164 @@ import { Icon } from '@/components/icon';
 import { SettingsRow, SettingsSection } from '@/components/settings';
 import { ThemedText } from '@/components/themed-text';
 import { showToast } from '@/components/toast';
-import { EmptyState, IconButton } from '@/components/ui';
+import { Button, EmptyState, IconButton } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
+import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { plural, useT } from '@/i18n';
 import { bankAlertsAvailable, openBankAlertSettings, useBankAlertsEnabled } from '@/notifications/bank-alerts';
-import { addDetected, paidOn, useDetected, type DetectedPayment } from '@/store/detected';
+import { addDetected, paidOn, settleUpMatches, useDetected, type DetectedPayment } from '@/store/detected';
+import { tripsFor } from '@/store/detected-match';
+import { addPaymentToTrip, ignorePayment, putBack, savePaymentAsPersonal, settleWithPayment, type Undo } from '@/store/payment-actions';
 import { relativeDay } from '@/store/summary';
-import { useTrips } from '@/store/trips';
+import { useTrips, type StoredTrip } from '@/store/trips';
 
-/** One payment at a glance: who, when, from where, and how much. Tapping it shows everything else. */
-function PaymentRow({ payment }: { payment: DetectedPayment }) {
-  const t = useT();
-  const router = useRouter();
-  const theme = useTheme();
-  const trips = useTrips();
-  const credit = payment.direction === 'credit';
-  const status = statusLabel(payment, trips, t);
+/** Shows what just happened, with a tap taking it back. Stays a little longer than other banners. */
+function done(title: string, undo: Undo, tapToUndo: string) {
+  showToast({ title, body: tapToUndo, icon: 'undo', onPress: undo, visibleMs: 8000 });
+}
+
+/** A label and value inside an expanded payment. */
+function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => router.push({ pathname: '/bank-payment', params: { alertId: payment.id } })}
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}>
-      <DirectionTile payment={payment} size={40} />
-      <View style={styles.grow}>
-        <ThemedText type="bold" numberOfLines={1}>
-          {paymentName(payment, t)}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-          {status ?? `${relativeDay(paidOn(payment), t)} · ${sourceLabel(payment, t)}`}
-        </ThemedText>
-      </View>
-      <ThemedText type="bold" style={{ color: credit ? theme.positive : theme.text }}>
-        {signedAmount(payment)}
+    <View style={styles.detail}>
+      <ThemedText type="caption" themeColor="textSecondary">
+        {label}
       </ThemedText>
-      <Icon name="chevronRight" size={18} color={theme.textSecondary} />
-    </Pressable>
+      <ThemedText type="small" numberOfLines={1} style={styles.detailValue}>
+        {value}
+      </ThemedText>
+    </View>
+  );
+}
+
+/**
+ * One payment: who, when and how much, with one tap to add it to the likeliest trip, save it as
+ * personal or ignore it. Tapping the row opens it in place for the full message and other trips.
+ */
+function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment; expanded: boolean; onToggle: () => void }) {
+  const t = useT();
+  const theme = useTheme();
+  const allTrips = useTrips();
+  const [choosing, setChoosing] = useState(false);
+  const credit = payment.direction === 'credit';
+  const name = paymentName(payment, t);
+  const status = statusLabel(payment, allTrips, t);
+  const waiting = payment.status === 'new';
+  const trips = credit ? [] : tripsFor(payment, allTrips);
+  const matches = credit ? settleUpMatches(allTrips, payment) : [];
+  const undoText = t('Tap to undo.');
+  const showChoices = expanded || choosing;
+
+  const toTrip = (trip: StoredTrip) => done(t('Added to “{trip}”', { trip: trip.name }), addPaymentToTrip(payment, trip, name), undoText);
+  const personal = () => done(t('Added as personal'), savePaymentAsPersonal(payment, name), undoText);
+  const ignore = () => done(t('Ignored'), ignorePayment(payment), undoText);
+  const settle = (index: number) => {
+    const match = matches[index];
+    const from = match.trip.members.find((member) => member.id === match.transfer.fromMemberId)?.name ?? t('Someone');
+    done(t('{name} paid you {amount}', { name: from, amount: formatPaise(payment.amount) }), settleWithPayment(payment, match), undoText);
+  };
+  const ower = (index: number) =>
+    matches[index].trip.members.find((member) => member.id === matches[index].transfer.fromMemberId)?.name ?? t('Someone');
+
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.row, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}>
+        <DirectionTile payment={payment} size={40} />
+        <View style={styles.grow}>
+          <ThemedText type="bold" numberOfLines={1}>
+            {name}
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+            {status ?? `${relativeDay(paidOn(payment), t)} · ${sourceLabel(payment, t)}`}
+          </ThemedText>
+        </View>
+        <ThemedText type="bold" style={{ color: credit ? theme.positive : theme.text }}>
+          {signedAmount(payment)}
+        </ThemedText>
+        <Icon name={expanded ? 'expandLess' : 'expandMore'} size={20} color={theme.textSecondary} />
+      </Pressable>
+
+      {waiting && (
+        <View style={styles.actions}>
+          {credit ? (
+            matches.length > 0 && (
+              <Button label={t('{name} paid', { name: ower(0) })} icon="check" compact onPress={() => settle(0)} />
+            )
+          ) : (
+            trips.length > 0 && (
+              <View style={styles.tripButton}>
+                <Button label={trips[0].name} icon="trip" compact onPress={() => toTrip(trips[0])} style={styles.tripMain} />
+                {trips.length > 1 && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('Choose another trip')}
+                    onPress={() => setChoosing(!choosing)}
+                    style={({ pressed }) => [styles.tripMore, { backgroundColor: theme.primaryFill, opacity: pressed ? 0.8 : 1 }]}>
+                    <Icon name={showChoices ? 'expandLess' : 'expandMore'} size={18} color={theme.onPrimary} />
+                  </Pressable>
+                )}
+              </View>
+            )
+          )}
+          {!credit && <Button label={t('Personal')} icon="person" variant="soft" compact onPress={personal} />}
+          <Button label={t('Ignore')} icon="close" variant="soft" compact onPress={ignore} />
+        </View>
+      )}
+
+      {waiting && showChoices && (trips.length > 1 || matches.length > 1) && (
+        <View style={styles.choices}>
+          <ThemedText type="caption" themeColor="textSecondary" style={styles.choicesTitle}>
+            {credit ? t('Or someone else who owes you') : t('Or another trip')}
+          </ThemedText>
+          <View style={styles.actions}>
+            {credit
+              ? matches.slice(1).map((match, index) => (
+                  <Button
+                    key={`${match.trip.id}-${match.transfer.fromMemberId}`}
+                    label={`${ower(index + 1)} · ${match.trip.name}`}
+                    variant="soft"
+                    compact
+                    onPress={() => settle(index + 1)}
+                  />
+                ))
+              : trips.slice(1).map((trip) => (
+                  <Button key={trip.id} label={trip.name} icon="trip" variant="soft" compact onPress={() => toTrip(trip)} />
+                ))}
+          </View>
+        </View>
+      )}
+
+      {expanded && (
+        <View style={[styles.expanded, { backgroundColor: theme.background }]}>
+          {payment.upiId && <Detail label={t('UPI ID')} value={payment.upiId} />}
+          {payment.account && <Detail label={t('Account or card')} value={`••${payment.account}`} />}
+          {payment.reference && <Detail label={t('Reference')} value={payment.reference} />}
+          <ThemedText type="caption" themeColor="textSecondary" selectable style={styles.message}>
+            {payment.text}
+          </ThemedText>
+          {!waiting && (
+            <Button label={t('Put back')} icon="undo" variant="soft" compact onPress={() => putBack(payment)} style={styles.putBack} />
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
 function PaymentList({ payments }: { payments: DetectedPayment[] }) {
   const theme = useTheme();
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <View style={[styles.list, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       {payments.map((payment, index) => (
         <View key={payment.id}>
           {index > 0 && <View style={[styles.divider, { backgroundColor: theme.border }]} />}
-          <PaymentRow payment={payment} />
+          <PaymentItem payment={payment} expanded={open === payment.id} onToggle={() => setOpen(open === payment.id ? null : payment.id)} />
         </View>
       ))}
     </View>
@@ -149,11 +260,6 @@ export default function DetectedScreen() {
                 </ThemedText>
               </View>
             )}
-            {waiting.length > 0 && (
-              <ThemedText type="caption" themeColor="textSecondary" style={styles.heading}>
-                {t('Tap a payment to see the full message and add it to a trip.')}
-              </ThemedText>
-            )}
           </View>
 
           {sorted.length > 0 && (
@@ -196,15 +302,64 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: Spacing.three + 40 + Spacing.three,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
-    minHeight: 64,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
+  },
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.three,
+  },
+  tripButton: {
+    flexDirection: 'row',
+  },
+  tripMain: {
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    maxWidth: 180,
+  },
+  tripMore: {
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+    marginLeft: 1,
+    borderTopRightRadius: Radius.pill,
+    borderBottomRightRadius: Radius.pill,
+  },
+  choices: {
+    gap: Spacing.two,
+  },
+  choicesTitle: {
+    paddingHorizontal: Spacing.three,
+  },
+  expanded: {
+    gap: Spacing.two,
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Radius.small,
+  },
+  detail: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  detailValue: {
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  message: {
+    marginTop: Spacing.one,
+  },
+  putBack: {
+    alignSelf: 'flex-start',
   },
   allSorted: {
     alignItems: 'center',

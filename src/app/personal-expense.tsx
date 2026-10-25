@@ -11,7 +11,6 @@ import { Button } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
-import { markDetected, PERSONAL, useDetected, type DetectedPayment } from '@/store/detected';
 import { cleanAmount, draftCategory, parseAmount, startPersonalDraft, updateDraft, useDraft, type ExpenseDraft } from '@/store/expense-draft';
 import { deletePersonalExpense, savePersonalExpense, usePersonalExpenses, type PersonalExpense } from '@/store/personal';
 import { relativeDay } from '@/store/summary';
@@ -34,9 +33,6 @@ function PersonalForm({ existing, draft }: { existing?: PersonalExpense; draft: 
       category: category.id,
       date: draft.date,
     });
-    if (draft.alertId) {
-      markDetected(draft.alertId, 'added', PERSONAL);
-    }
     router.back();
   };
 
@@ -77,7 +73,7 @@ function PersonalForm({ existing, draft }: { existing?: PersonalExpense; draft: 
             onChangeText={(description) => updateDraft({ description })}
             placeholder={t('What was it for?')}
             placeholderTextColor={theme.textSecondary}
-            autoFocus={!existing && !draft.alertId}
+            autoFocus={!existing}
             style={[styles.description, underline]}
           />
         </View>
@@ -122,17 +118,17 @@ function PersonalForm({ existing, draft }: { existing?: PersonalExpense; draft: 
   );
 }
 
-function PersonalEditor({ existing, payment }: { existing?: PersonalExpense; payment?: DetectedPayment }) {
+function PersonalEditor({ existing }: { existing?: PersonalExpense }) {
   // Started once when the page opens; the category and date pages share it.
-  useState(() => startPersonalDraft(existing, payment, false));
+  useState(() => startPersonalDraft(existing, false));
   const draft = useDraft();
   const current = draft !== null && draft.tripId === '' && draft.expenseId === existing?.id;
   // A reload during development clears the draft; start it again rather than show an empty page.
   useEffect(() => {
     if (!current) {
-      startPersonalDraft(existing, payment);
+      startPersonalDraft(existing);
     }
-  }, [current, existing, payment]);
+  }, [current, existing]);
   if (!current || !draft) {
     return null;
   }
@@ -140,10 +136,9 @@ function PersonalEditor({ existing, payment }: { existing?: PersonalExpense; pay
 }
 
 export default function PersonalExpenseScreen() {
-  const { expenseId, alertId } = useLocalSearchParams<{ expenseId?: string; alertId?: string }>();
+  const { expenseId } = useLocalSearchParams<{ expenseId?: string }>();
   const existing = usePersonalExpenses().find((expense) => expense.id === expenseId);
-  const payment = useDetected().find((candidate) => candidate.id === alertId);
-  return <PersonalEditor existing={existing} payment={payment?.status === 'new' ? payment : undefined} />;
+  return <PersonalEditor existing={existing} />;
 }
 
 const styles = StyleSheet.create({

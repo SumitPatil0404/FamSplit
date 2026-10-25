@@ -1,4 +1,4 @@
-import { expenseDescription, fillIn, isDuplicate, nameFromUpiId, paidOn, settleUpMatches, type DetectedPayment } from '../detected-match';
+import { fillIn, isDuplicate, nameFromUpiId, paidOn, settleUpMatches, tripExpenseFrom, tripsFor, type DetectedPayment } from '../detected-match';
 import type { StoredTrip } from '../trips';
 
 // Rajesh (on this phone) paid ₹3,000 for all three, so Priya owes him ₹1,000 inside the Sharma
@@ -112,11 +112,34 @@ describe('nameFromUpiId', () => {
   });
 });
 
-describe('expenseDescription', () => {
-  it('prefers the payee the bank names, then the UPI ID', () => {
-    expect(expenseDescription(received({ party: 'Zomato', upiId: 'zomato.order@hdfcbank' }))).toBe('Zomato');
-    expect(expenseDescription(received({ upiId: 'corn@okhdfc' }))).toBe('Corn');
-    expect(expenseDescription(received({}))).toBe('');
+describe('tripsFor', () => {
+  const paid = received({ direction: 'debit', date: '2026-10-03' });
+  const other: StoredTrip = { ...trip, id: 't2', name: 'Manali', createdAt: '2026-10-20T08:00:00.000Z', expenses: [] };
+
+  it('puts the trip whose dates cover the payment first, then the one used most recently', () => {
+    // Goa's only expense is on 2 October, so a payment on the 3rd falls inside it.
+    expect(tripsFor(paid, [other, trip]).map((candidate) => candidate.name)).toEqual(['Goa', 'Manali']);
+    expect(tripsFor(received({ direction: 'debit', date: '2026-10-22' }), [trip, other]).map((candidate) => candidate.name)).toEqual([
+      'Manali',
+      'Goa',
+    ]);
+  });
+
+  it('leaves out finalised trips and ones where this phone has not said who it is', () => {
+    expect(tripsFor(paid, [{ ...trip, finalizedAt: '2026-10-10T00:00:00.000Z' }, { ...other, meId: '' }])).toEqual([]);
+  });
+});
+
+describe('tripExpenseFrom', () => {
+  it('is paid by this phone’s owner and split equally among everyone', () => {
+    expect(tripExpenseFrom(received({ direction: 'debit', amount: 90000, date: '2026-10-03' }), trip, 'e9', 'Zomato')).toMatchObject({
+      id: 'e9',
+      description: 'Zomato',
+      category: 'food',
+      amount: 90000,
+      paidBy: { m1: 90000 },
+      split: { type: 'equal', memberIds: ['m1', 'm2', 'm3'] },
+    });
   });
 });
 

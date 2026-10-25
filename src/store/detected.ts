@@ -71,6 +71,6 @@ export function addDetected(text: string, options: { source?: string; seenAt?: s
   return { payment };
 }
 
-export function markDetected(id: string, status: DetectedPayment['status'], tripId?: string) {
-  save(detected.map((payment) => (payment.id === id ? { ...payment, status, tripId } : payment)));
+export function markDetected(id: string, status: DetectedPayment['status'], tripId?: string, createdId?: string) {
+  save(detected.map((payment) => (payment.id === id ? { ...payment, status, tripId, createdId } : payment)));
 }

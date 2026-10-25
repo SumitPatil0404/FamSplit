@@ -342,11 +342,14 @@ export function deleteExpense(tripId: string, expenseId: string) {
   }));
 }
 
-export function addPayment(tripId: string, payment: { fromMemberId: string; toMemberId: string; amount: number }) {
+/** Returns the new payment's id, so it can be undone. */
+export function addPayment(tripId: string, payment: { fromMemberId: string; toMemberId: string; amount: number }): string {
+  const id = newId('pay');
   updateTrip(tripId, (trip) => ({
     ...trip,
-    payments: [{ id: newId('pay'), date: new Date().toISOString(), ...payment }, ...trip.payments],
+    payments: [{ id, date: new Date().toISOString(), ...payment }, ...trip.payments],
   }));
+  return id;
 }
 
 export function deletePayment(tripId: string, paymentId: string) {

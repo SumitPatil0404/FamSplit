@@ -13,6 +13,8 @@ export type Toast = {
   icon?: IconName;
   /** Runs when the banner is tapped, for example to open the trip it is about. */
   onPress?: () => void;
+  /** How long it stays, for a banner that offers something to do, like undo. */
+  visibleMs?: number;
 };
 
 const VISIBLE_MS = 5000;
@@ -47,6 +49,7 @@ export function ToastHost() {
   const toast = useSyncExternalStore(subscribe, getCurrent, getCurrent);
   const [slide] = useState(() => new Animated.Value(0));
   const id = toast?.id;
+  const visibleMs = toast?.visibleMs ?? VISIBLE_MS;
 
   useEffect(() => {
     if (id === undefined) {
@@ -60,9 +63,9 @@ export function ToastHost() {
           set(null);
         }
       });
-    }, VISIBLE_MS);
+    }, visibleMs);
     return () => clearTimeout(timer);
-  }, [id, slide]);
+  }, [id, slide, visibleMs]);
 
   if (!toast) {
     return null;

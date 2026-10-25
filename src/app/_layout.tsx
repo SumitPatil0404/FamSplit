@@ -53,8 +53,6 @@ export default function RootLayout() {
         <Stack.Screen name="auth-callback" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="welcome" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="detected" options={{ title: t('Bank payments') }} />
-        <Stack.Screen name="detected-use" options={{ title: '', presentation: 'modal' }} />
-        <Stack.Screen name="bank-payment" options={{ title: '', presentation: 'modal' }} />
         <Stack.Screen name="bank-alerts-setup" options={{ title: '', presentation: 'modal' }} />
         <Stack.Screen name="personal-expense" options={{ title: t('Personal expense'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
