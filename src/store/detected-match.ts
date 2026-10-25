@@ -1,7 +1,6 @@
-import { settleTrip, type BankAlert, type Transfer } from '@/domain';
+import { settleTrip, type BankAlert, type Paise, type Transfer } from '@/domain';
 
-import { guessCategory } from './categories';
-import type { StoredExpense, StoredTrip } from './trips';
+import type { StoredTrip } from './trips';
 
 /** A payment picked up from a bank or UPI alert. It stays on this phone and is never synced. */
 export type DetectedPayment = BankAlert & {
@@ -100,17 +99,23 @@ export function tripsFor(payment: DetectedPayment, trips: StoredTrip[]): StoredT
     .sort((a, b) => Number(covers(b)) - Number(covers(a)) || lastUsed(b) - lastUsed(a));
 }
 
-/** The expense a one-tap "add to trip" creates: paid by this phone's owner, split equally among everyone. */
-export function tripExpenseFrom(payment: DetectedPayment, trip: StoredTrip, id: string, description: string): StoredExpense {
-  return {
-    id,
-    date: paidOn(payment),
-    description,
-    category: guessCategory(description).id,
-    amount: payment.amount,
-    paidBy: { [trip.meId]: payment.amount },
-    split: { type: 'equal', memberIds: trip.members.map((member) => member.id) },
-  };
+/** What each person still owes this phone's owner on a trip, by member id. */
+export function owedToMe(trip: StoredTrip): Map<string, Paise> {
+  const owed = new Map<string, Paise>();
+  if (!trip.meId) {
+    return owed;
+  }
+  try {
+    const settlement = settleTrip(trip);
+    for (const transfer of [...settlement.betweenFamilies, ...[...settlement.withinFamily.values()].flat()]) {
+      if (transfer.toMemberId === trip.meId) {
+        owed.set(transfer.fromMemberId, (owed.get(transfer.fromMemberId) ?? 0) + transfer.amount);
+      }
+    }
+  } catch {
+    // Still downloading; nothing is known to be owed yet.
+  }
+  return owed;
 }
 
 export type SettleUpMatch = {

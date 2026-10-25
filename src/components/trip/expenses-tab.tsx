@@ -152,7 +152,9 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
   }
 
   const friends = isFriendsTrip(trip);
-  if (trip.families.length < 2) {
+  const nothingYet = trip.expenses.length === 0 && trip.payments.length === 0;
+  const aloneSoFar = trip.families.length < 2;
+  if (aloneSoFar && nothingYet) {
     return (
       <EmptyState
         emoji="🙌"
@@ -172,7 +174,7 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
     );
   }
 
-  if (trip.expenses.length === 0 && trip.payments.length === 0) {
+  if (nothingYet) {
     return (
       <EmptyState
         emoji="🧾"
@@ -190,6 +192,24 @@ export function ExpensesTab({ trip, finalised, onAddFamily, onAddExpense }: Prop
 
   return (
     <View style={styles.list}>
+      {/* Expenses can arrive before anyone else is added, for example from bank payments; show them and nudge. */}
+      {aloneSoFar && !finalised && (
+        <Card style={styles.row}>
+          <View style={styles.grow}>
+            <ThemedText type="bold">{friends ? t('Only you so far') : t('Only your family so far')}</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {friends ? t('Add the others to split these expenses with them.') : t('Add the other families to split these expenses with them.')}
+            </ThemedText>
+          </View>
+          <Button
+            label={friends ? t('Add people') : t('Add a family')}
+            icon={friends ? 'personAdd' : 'groupAdd'}
+            variant="soft"
+            compact
+            onPress={onAddFamily}
+          />
+        </Card>
+      )}
       {!friends && (
         <ThemedText type="caption" themeColor="textSecondary">
           {t('“You” means your whole family on this trip')}

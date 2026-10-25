@@ -32,7 +32,12 @@ export type ExpenseDraft = {
   familyOn: Record<string, boolean>;
   shares: Record<string, number>;
   exactTexts: Record<string, string>;
+  /** The bank payment this expense was started from, marked as added once it is saved. */
+  alertId?: string;
 };
+
+/** What a bank payment fills in when an expense is started from it. */
+export type DraftFromPayment = { alertId: string; amount: Paise; description: string; date: string };
 
 let draft: ExpenseDraft | null = null;
 const listeners = new Set<() => void>();
@@ -68,18 +73,20 @@ function toTexts(amounts: Record<string, Paise>): Record<string, string> {
 }
 
 /**
- * A fresh draft for a new expense, or one filled in from an expense being edited. While a page is
- * rendering it must not notify other components, so it passes `notify: false`.
+ * A fresh draft for a new expense, one filled in from an expense being edited, or one filled in from
+ * a bank payment. While a page is rendering it must not notify other components, so it passes
+ * `notify: false`.
  */
-export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true) {
+export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true, fromPayment?: DraftFromPayment) {
   const payers = existing ? Object.keys(existing.paidBy).filter((id) => existing.paidBy[id] > 0) : [];
   const split = existing?.split;
   set({
     tripId: trip.id,
     expenseId: existing?.id,
-    amountText: existing ? String(existing.amount / 100) : '',
-    date: existing?.date ?? new Date().toISOString(),
-    description: existing?.description ?? '',
+    alertId: existing ? undefined : fromPayment?.alertId,
+    amountText: existing ? String(existing.amount / 100) : fromPayment ? String(fromPayment.amount / 100) : '',
+    date: existing?.date ?? fromPayment?.date ?? new Date().toISOString(),
+    description: existing?.description ?? fromPayment?.description ?? '',
     categoryId: existing?.category,
     payerId: existing ? (payers.length > 1 ? SEVERAL : payers[0]) : trip.meId || (trip.members[0]?.id ?? ''),
     paidTexts: existing && payers.length > 1 ? toTexts(existing.paidBy) : {},

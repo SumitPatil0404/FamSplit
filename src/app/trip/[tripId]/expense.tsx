@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { paymentName } from '@/components/bank-payment-parts';
 import { Icon, type IconName } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { CategoryTile } from '@/components/trip/expense-parts';
@@ -11,6 +12,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
+import { markDetected, paidOn, useDetected } from '@/store/detected';
 import {
   cleanAmount,
   payerLabel,
@@ -19,6 +21,7 @@ import {
   startDraft,
   updateDraft,
   useDraft,
+  type DraftFromPayment,
   type ExpenseDraft,
 } from '@/store/expense-draft';
 import { relativeDay } from '@/store/summary';
@@ -63,8 +66,9 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
     router.push({ pathname, params: { tripId: trip.id } });
 
   const save = () => {
+    const id = existing?.id ?? newId('exp');
     saveExpense(trip.id, {
-      id: existing?.id ?? newId('exp'),
+      id,
       date: draft.date,
       description: draft.description.trim() || t(category.label),
       category: category.id,
@@ -72,6 +76,10 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
       paidBy,
       split,
     });
+    if (draft.alertId) {
+      // The bank payment it came from is now sorted, and remembers this expense so it can be put back.
+      markDetected(draft.alertId, 'added', trip.id, id);
+    }
     router.back();
   };
 
@@ -185,17 +193,17 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
   );
 }
 
-function ExpenseEditor({ trip, existing }: { trip: StoredTrip; existing?: StoredExpense }) {
+function ExpenseEditor({ trip, existing, fromPayment }: { trip: StoredTrip; existing?: StoredExpense; fromPayment?: DraftFromPayment }) {
   // The draft is started once when this page opens; the category, payer and split pages share it.
-  useState(() => startDraft(trip, existing, false));
+  useState(() => startDraft(trip, existing, false, fromPayment));
   const draft = useDraft();
   const current = draft !== null && draft.tripId === trip.id && draft.expenseId === existing?.id;
   // A reload during development clears the draft; start it again rather than show an empty page.
   useEffect(() => {
     if (!current) {
-      startDraft(trip, existing);
+      startDraft(trip, existing, true, fromPayment);
     }
-  }, [current, trip, existing]);
+  }, [current, trip, existing, fromPayment]);
   if (!current || !draft) {
     return null;
   }
@@ -204,13 +212,17 @@ function ExpenseEditor({ trip, existing }: { trip: StoredTrip; existing?: Stored
 
 export default function ExpenseScreen() {
   const t = useT();
-  const { tripId, expenseId } = useLocalSearchParams<{ tripId: string; expenseId?: string }>();
+  const { tripId, expenseId, alertId } = useLocalSearchParams<{ tripId: string; expenseId?: string; alertId?: string }>();
   const trip = useTrip(tripId);
+  const payment = useDetected().find((candidate) => candidate.id === alertId && candidate.status === 'new');
+  const [fromPayment] = useState<DraftFromPayment | undefined>(() =>
+    payment ? { alertId: payment.id, amount: payment.amount, description: paymentName(payment, t), date: paidOn(payment) } : undefined,
+  );
 
   if (!trip) {
     return <EmptyState emoji="🤔" title={t('Trip not found')} body={t('It may have been deleted from this phone.')} />;
   }
-  return <ExpenseEditor trip={trip} existing={trip.expenses.find((expense) => expense.id === expenseId)} />;
+  return <ExpenseEditor trip={trip} existing={trip.expenses.find((expense) => expense.id === expenseId)} fromPayment={fromPayment} />;
 }
 
 const styles = StyleSheet.create({

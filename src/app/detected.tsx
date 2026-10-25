@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { DirectionTile, paymentName, signedAmount, sourceLabel, statusLabel } from '@/components/bank-payment-parts';
@@ -15,8 +15,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { plural, useT } from '@/i18n';
 import { bankAlertsAvailable, openBankAlertSettings, useBankAlertsEnabled } from '@/notifications/bank-alerts';
 import { addDetected, paidOn, settleUpMatches, useDetected, type DetectedPayment } from '@/store/detected';
-import { tripsFor } from '@/store/detected-match';
-import { addPaymentToTrip, ignorePayment, putBack, savePaymentAsPersonal, settleWithPayment, type Undo } from '@/store/payment-actions';
+import { owedToMe, tripsFor } from '@/store/detected-match';
+import { ignorePayment, putBack, savePaymentAsPersonal, settleFrom, type Undo } from '@/store/payment-actions';
 import { relativeDay } from '@/store/summary';
 import { isFriendsTrip, useTrips, type StoredTrip } from '@/store/trips';
 
@@ -62,21 +62,8 @@ function Pill({ label, icon, onPress, filled, style }: { label: string; icon?: I
   );
 }
 
-/**
- * Every open trip a payment could go to, best fit first, in a dialog over the list. Picking one adds
- * the payment there straight away.
- */
-function TripPicker({
-  payment,
-  trips,
-  onPick,
-  onClose,
-}: {
-  payment: DetectedPayment;
-  trips: StoredTrip[];
-  onPick: (trip: StoredTrip) => void;
-  onClose: () => void;
-}) {
+/** A dialog over the list, so choosing never leaves the page. */
+function ChoiceDialog({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: ReactNode }) {
   const t = useT();
   const theme = useTheme();
   return (
@@ -85,29 +72,13 @@ function TripPicker({
         {/* Swallows taps so pressing the card itself does not close it. */}
         <Pressable onPress={() => {}} style={[styles.dialog, { backgroundColor: theme.backgroundElement }]}>
           <ThemedText type="heading" style={styles.centered}>
-            {t('Which trip was {amount} for?', { amount: formatPaise(payment.amount) })}
+            {title}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.centered}>
-            {paymentName(payment, t)}
+            {subtitle}
           </ThemedText>
           <ScrollView style={styles.dialogList} contentContainerStyle={styles.dialogListContent}>
-            {trips.map((trip, index) => (
-              <Pressable
-                key={trip.id}
-                accessibilityRole="button"
-                onPress={() => onPick(trip)}
-                style={({ pressed }) => [styles.dialogRow, { backgroundColor: pressed ? theme.backgroundSelected : theme.background }]}>
-                <Icon name={isFriendsTrip(trip) ? 'group' : 'family'} size={20} color={theme.primary} />
-                <ThemedText type="bold" numberOfLines={1} style={styles.grow}>
-                  {trip.name}
-                </ThemedText>
-                {index === 0 && (
-                  <ThemedText type="caption" themeColor="primary">
-                    {t('Suggested')}
-                  </ThemedText>
-                )}
-              </Pressable>
-            ))}
+            {children}
           </ScrollView>
           <Pill label={t('Cancel')} onPress={onClose} style={styles.dialogCancel} />
         </Pressable>
@@ -116,12 +87,34 @@ function TripPicker({
   );
 }
 
+function DialogRow({ icon, label, note, onPress }: { icon: IconName; label: string; note?: string; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.dialogRow, { backgroundColor: pressed ? theme.backgroundSelected : theme.background }]}>
+      <Icon name={icon} size={20} color={theme.primary} />
+      <ThemedText type="bold" numberOfLines={1} style={styles.grow}>
+        {label}
+      </ThemedText>
+      {note && (
+        <ThemedText type="caption" themeColor="primary">
+          {note}
+        </ThemedText>
+      )}
+    </Pressable>
+  );
+}
+
 /**
- * One payment: who, when and how much, with one tap to add it to the likeliest trip, save it as
- * personal or ignore it. Tapping the row opens it in place for the full message and other trips.
+ * One payment: who, when and how much. Money paid goes to the likeliest trip or to personal in one
+ * tap; money received is recorded as someone settling up. ✕ ignores it. Tapping the row opens it in
+ * place for the full message.
  */
 function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment; expanded: boolean; onToggle: () => void }) {
   const t = useT();
+  const router = useRouter();
   const theme = useTheme();
   const allTrips = useTrips();
   const [picking, setPicking] = useState(false);
@@ -129,20 +122,20 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
   const name = paymentName(payment, t);
   const status = statusLabel(payment, allTrips, t);
   const waiting = payment.status === 'new';
-  const trips = credit ? [] : tripsFor(payment, allTrips);
-  const matches = credit ? settleUpMatches(allTrips, payment) : [];
+  const amount = formatPaise(payment.amount);
+  // Money received can only be from someone else on the trip.
+  const trips = tripsFor(payment, allTrips).filter((trip) => !credit || trip.members.length > 1);
+  const best = credit ? settleUpMatches(allTrips, payment)[0] : undefined;
   const undoText = t('Tap to undo.');
+  const memberName = (trip: StoredTrip, memberId: string) => trip.members.find((member) => member.id === memberId)?.name ?? t('Someone');
 
-  const toTrip = (trip: StoredTrip) => done(t('Added to “{trip}”', { trip: trip.name }), addPaymentToTrip(payment, trip, name), undoText);
+  // Opens the expense filled in from the payment, so the split can be chosen before saving.
+  const toTrip = (trip: StoredTrip) =>
+    router.push({ pathname: '/trip/[tripId]/expense', params: { tripId: trip.id, alertId: payment.id } });
   const personal = () => done(t('Added as personal'), savePaymentAsPersonal(payment, name), undoText);
   const ignore = () => done(t('Ignored'), ignorePayment(payment), undoText);
-  const settle = (index: number) => {
-    const match = matches[index];
-    const from = match.trip.members.find((member) => member.id === match.transfer.fromMemberId)?.name ?? t('Someone');
-    done(t('{name} paid you {amount}', { name: from, amount: formatPaise(payment.amount) }), settleWithPayment(payment, match), undoText);
-  };
-  const ower = (index: number) =>
-    matches[index].trip.members.find((member) => member.id === matches[index].transfer.fromMemberId)?.name ?? t('Someone');
+  const settle = (trip: StoredTrip, memberId: string) =>
+    done(t('{name} paid you {amount}', { name: memberName(trip, memberId), amount }), settleFrom(payment, trip, memberId), undoText);
 
   return (
     <View>
@@ -180,10 +173,20 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
         </View>
       </Pressable>
 
-      {waiting && (credit ? matches.length > 0 : true) && (
-        <View style={[styles.actions, styles.actionsRight]}>
+      {waiting && (credit ? best !== undefined || trips.length > 0 : true) && (
+        <View style={styles.actions}>
           {credit ? (
-            <Pill label={t('{name} paid', { name: ower(0) })} icon="check" filled onPress={() => settle(0)} />
+            <>
+              {best && (
+                <Pill
+                  label={t('{name} paid', { name: memberName(best.trip, best.transfer.fromMemberId) })}
+                  icon="check"
+                  filled
+                  onPress={() => settle(best.trip, best.transfer.fromMemberId)}
+                />
+              )}
+              {trips.length > 0 && <Pill label={t('Settle up')} icon="handshake" filled={!best} onPress={() => setPicking(true)} />}
+            </>
           ) : (
             <>
               {trips.length > 0 && (
@@ -213,33 +216,50 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
         </View>
       )}
 
-      {picking && (
-        <TripPicker
-          payment={payment}
-          trips={trips}
-          onPick={(trip) => {
-            setPicking(false);
-            toTrip(trip);
-          }}
-          onClose={() => setPicking(false)}
-        />
+      {picking && !credit && (
+        <ChoiceDialog title={t('Which trip was {amount} for?', { amount })} subtitle={name} onClose={() => setPicking(false)}>
+          {trips.map((trip, index) => (
+            <DialogRow
+              key={trip.id}
+              icon={isFriendsTrip(trip) ? 'group' : 'family'}
+              label={trip.name}
+              note={index === 0 ? t('Suggested') : undefined}
+              onPress={() => {
+                setPicking(false);
+                toTrip(trip);
+              }}
+            />
+          ))}
+        </ChoiceDialog>
       )}
 
-      {waiting && expanded && matches.length > 1 && (
-        <View style={styles.choices}>
-          <ThemedText type="caption" themeColor="textSecondary" style={styles.choicesTitle}>
-            {t('Or someone else who owes you')}
-          </ThemedText>
-          <View style={styles.actions}>
-            {matches.slice(1).map((match, index) => (
-              <Pill
-                key={`${match.trip.id}-${match.transfer.fromMemberId}`}
-                label={`${ower(index + 1)} · ${match.trip.name}`}
-                onPress={() => settle(index + 1)}
-              />
-            ))}
-          </View>
-        </View>
+      {picking && credit && (
+        <ChoiceDialog title={t('Who paid you {amount}?', { amount })} subtitle={name} onClose={() => setPicking(false)}>
+          {trips.map((trip) => {
+            const owed = owedToMe(trip);
+            return (
+              <View key={trip.id} style={styles.dialogGroup}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {trip.name}
+                </ThemedText>
+                {trip.members
+                  .filter((member) => member.id !== trip.meId)
+                  .map((member) => (
+                    <DialogRow
+                      key={member.id}
+                      icon="person"
+                      label={member.name}
+                      note={owed.has(member.id) ? t('owes you {amount}', { amount: formatPaise(owed.get(member.id)!) }) : undefined}
+                      onPress={() => {
+                        setPicking(false);
+                        settle(trip, member.id);
+                      }}
+                    />
+                  ))}
+              </View>
+            );
+          })}
+        </ChoiceDialog>
       )}
 
       {expanded && (
@@ -416,15 +436,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: Spacing.one,
   },
-  actionsRight: {
-    justifyContent: 'flex-end',
-  },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'flex-end',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.three,
+  },
+  tripButton: {
+    flexDirection: 'row',
+  },
+  tripMain: {
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  tripMore: {
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+    marginLeft: 1,
+    borderTopRightRadius: Radius.pill,
+    borderBottomRightRadius: Radius.pill,
+  },
+  dialogGroup: {
+    gap: Spacing.two,
   },
   pill: {
     flexDirection: 'row',
@@ -444,26 +479,6 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tripButton: {
-    flexDirection: 'row',
-  },
-  tripMain: {
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  tripMore: {
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.two,
-    marginLeft: 1,
-    borderTopRightRadius: Radius.pill,
-    borderBottomRightRadius: Radius.pill,
-  },
-  choices: {
-    gap: Spacing.two,
-  },
-  choicesTitle: {
-    paddingHorizontal: Spacing.three,
   },
   expanded: {
     gap: Spacing.two,

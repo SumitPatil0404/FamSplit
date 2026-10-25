@@ -1,4 +1,4 @@
-import { fillIn, isDuplicate, nameFromUpiId, paidOn, settleUpMatches, tripExpenseFrom, tripsFor, type DetectedPayment } from '../detected-match';
+import { fillIn, isDuplicate, nameFromUpiId, paidOn, settleUpMatches, tripsFor, type DetectedPayment } from '../detected-match';
 import type { StoredTrip } from '../trips';
 
 // Rajesh (on this phone) paid ₹3,000 for all three, so Priya owes him ₹1,000 inside the Sharma
@@ -127,19 +127,6 @@ describe('tripsFor', () => {
 
   it('leaves out finalised trips and ones where this phone has not said who it is', () => {
     expect(tripsFor(paid, [{ ...trip, finalizedAt: '2026-10-10T00:00:00.000Z' }, { ...other, meId: '' }])).toEqual([]);
-  });
-});
-
-describe('tripExpenseFrom', () => {
-  it('is paid by this phone’s owner and split equally among everyone', () => {
-    expect(tripExpenseFrom(received({ direction: 'debit', amount: 90000, date: '2026-10-03' }), trip, 'e9', 'Zomato')).toMatchObject({
-      id: 'e9',
-      description: 'Zomato',
-      category: 'food',
-      amount: 90000,
-      paidBy: { m1: 90000 },
-      split: { type: 'equal', memberIds: ['m1', 'm2', 'm3'] },
-    });
   });
 });
 
