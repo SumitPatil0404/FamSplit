@@ -17,6 +17,12 @@ export function savePaymentAsPersonal(payment: DetectedPayment, description: str
   return () => putBack({ ...payment, status: 'added', tripId: PERSONAL, createdId: id });
 }
 
+/** Money received that is the person's own, such as salary or a refund: sorted, with nothing created. */
+export function keepPaymentAsPersonal(payment: DetectedPayment): Undo {
+  markDetected(payment.id, 'added', PERSONAL);
+  return () => putBack({ ...payment, status: 'added', tripId: PERSONAL });
+}
+
 export function ignorePayment(payment: DetectedPayment): Undo {
   markDetected(payment.id, 'dismissed');
   return () => putBack({ ...payment, status: 'dismissed' });

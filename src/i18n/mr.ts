@@ -200,6 +200,7 @@ export const mr: Record<string, string> = {
   'June': 'जून',
   'Keep it': 'राहू द्या',
   'Keep my account': 'माझे खाते ठेवा',
+  'Kept as personal': 'वैयक्तिक म्हणून ठेवले',
   'Language': 'भाषा',
   'Leave "{name}"?': '"{name}" सोडायची?',
   'Leave anyone who paid nothing empty.': 'ज्यांनी काहीच भरले नाही ते रिकामे ठेवा.',

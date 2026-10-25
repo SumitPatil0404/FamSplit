@@ -16,7 +16,7 @@ import { plural, useT } from '@/i18n';
 import { bankAlertsAvailable, openBankAlertSettings, useBankAlertsEnabled } from '@/notifications/bank-alerts';
 import { addDetected, paidOn, settleUpMatches, useDetected, type DetectedPayment } from '@/store/detected';
 import { owedToMe, tripsFor } from '@/store/detected-match';
-import { ignorePayment, putBack, savePaymentAsPersonal, settleFrom, type Undo } from '@/store/payment-actions';
+import { ignorePayment, keepPaymentAsPersonal, putBack, savePaymentAsPersonal, settleFrom, type Undo } from '@/store/payment-actions';
 import { relativeDay } from '@/store/summary';
 import { isFriendsTrip, useTrips, type StoredTrip } from '@/store/trips';
 
@@ -132,7 +132,10 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
   // Opens the expense filled in from the payment, so the split can be chosen before saving.
   const toTrip = (trip: StoredTrip) =>
     router.push({ pathname: '/trip/[tripId]/expense', params: { tripId: trip.id, alertId: payment.id } });
-  const personal = () => done(t('Added as personal'), savePaymentAsPersonal(payment, name), undoText);
+  const personal = () =>
+    credit
+      ? done(t('Kept as personal'), keepPaymentAsPersonal(payment), undoText)
+      : done(t('Added as personal'), savePaymentAsPersonal(payment, name), undoText);
   const ignore = () => done(t('Ignored'), ignorePayment(payment), undoText);
   const settle = (trip: StoredTrip, memberId: string) =>
     done(t('{name} paid you {amount}', { name: memberName(trip, memberId), amount }), settleFrom(payment, trip, memberId), undoText);
@@ -173,7 +176,7 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
         </View>
       </Pressable>
 
-      {waiting && (credit ? best !== undefined || trips.length > 0 : true) && (
+      {waiting && (
         <View style={styles.actions}>
           {credit ? (
             <>
@@ -186,6 +189,7 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
                 />
               )}
               {trips.length > 0 && <Pill label={t('Settle up')} icon="handshake" filled={!best} onPress={() => setPicking(true)} />}
+              <Pill label={t('Personal')} icon="person" onPress={personal} />
             </>
           ) : (
             <>

@@ -48,7 +48,7 @@ export function statusLabel(payment: DetectedPayment, trips: StoredTrip[], t: T)
     return t('Ignored');
   }
   if (payment.tripId === PERSONAL) {
-    return t('Added as personal');
+    return payment.direction === 'credit' ? t('Kept as personal') : t('Added as personal');
   }
   const trip = trips.find((candidate) => candidate.id === payment.tripId);
   return trip ? t('Added to “{trip}”', { trip: trip.name }) : t('Added');
