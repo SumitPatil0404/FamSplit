@@ -44,6 +44,7 @@ const icons = {
   receipt: { ios: 'list.bullet.rectangle', android: 'receipt_long' },
   copy: { ios: 'doc.on.doc', android: 'content_copy' },
   openApp: { ios: 'arrow.up.right.square', android: 'open_in_new' },
+  wallet: { ios: 'creditcard', android: 'account_balance_wallet' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

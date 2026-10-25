@@ -6,7 +6,7 @@ import { parseBankAlert } from '@/domain';
 import { fillIn, findDuplicate, type DetectedPayment } from './detected-match';
 import { newId } from './trips';
 
-export { paidOn, settleUpMatches, type DetectedPayment, type SettleUpMatch } from './detected-match';
+export { paidOn, PERSONAL, settleUpMatches, type DetectedPayment, type SettleUpMatch } from './detected-match';
 
 const DETECTED_KEY = 'famsplit.detected.v1';
 /** Older alerts are dropped, so the list never grows without end. */

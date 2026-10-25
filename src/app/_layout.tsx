@@ -10,9 +10,9 @@ import { useT } from '@/i18n';
 import { startBankAlerts } from '@/notifications/bank-alerts';
 import { startSync } from '@/sync/sync';
 
-// A link straight to a screen, such as a tapped bank payment notification, still has the trips list to go back to.
+// A link straight to a screen, such as a tapped bank payment notification, still has the tabs to go back to.
 export const unstable_settings = {
-  anchor: 'index',
+  anchor: '(tabs)',
 };
 
 export default function RootLayout() {
@@ -45,7 +45,7 @@ export default function RootLayout() {
           headerTitleStyle: { fontWeight: '700' },
           contentStyle: { backgroundColor: colors.background },
         }}>
-        <Stack.Screen name="index" options={{ title: 'FamSplit' }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="new-trip" options={{ title: t('New trip'), presentation: 'modal' }} />
         <Stack.Screen name="account" options={{ title: t('Account'), presentation: 'modal' }} />
         <Stack.Screen name="join" options={{ title: t('Join a trip'), presentation: 'modal' }} />
@@ -54,14 +54,15 @@ export default function RootLayout() {
         <Stack.Screen name="detected" options={{ title: t('Bank payments') }} />
         <Stack.Screen name="detected-use" options={{ title: '', presentation: 'modal' }} />
         <Stack.Screen name="bank-alerts-setup" options={{ title: '', presentation: 'modal' }} />
+        <Stack.Screen name="personal-expense" options={{ title: t('Personal expense'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
         <Stack.Screen name="trip/[tripId]/expense" options={{ title: t('Add expense'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-details" options={{ title: '' }} />
-        <Stack.Screen name="trip/[tripId]/expense-category" options={{ title: t('Category'), presentation: 'modal' }} />
+        <Stack.Screen name="expense-category" options={{ title: t('Category'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-payer" options={{ title: t('Paid by'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-payers" options={{ title: t('Several people paid'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-split" options={{ title: t('How is it split?'), presentation: 'modal' }} />
-        <Stack.Screen name="trip/[tripId]/expense-date" options={{ title: t('When was it paid?'), presentation: 'modal' }} />
+        <Stack.Screen name="expense-date" options={{ title: t('When was it paid?'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/family" options={{ title: t('Add family'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/person" options={{ title: t('Add person'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/who" options={{ title: t('Which one is you?'), presentation: 'modal' }} />

@@ -60,13 +60,7 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
   const insets = useSafeAreaInsets();
   const { amount, category, paidBy, split, preview, problem } = readDraft(draft, trip, t);
 
-  const open = (
-    pathname:
-      | '/trip/[tripId]/expense-category'
-      | '/trip/[tripId]/expense-payer'
-      | '/trip/[tripId]/expense-split'
-      | '/trip/[tripId]/expense-date',
-  ) =>
+  const open = (pathname: '/expense-category' | '/trip/[tripId]/expense-payer' | '/trip/[tripId]/expense-split' | '/expense-date') =>
     router.push({ pathname, params: { tripId: trip.id } });
 
   const save = () => {
@@ -106,7 +100,7 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('Category: {name}. Change category', { name: t(category.label) })}
-              onPress={() => open('/trip/[tripId]/expense-category')}>
+              onPress={() => open('/expense-category')}>
               <CategoryTile emoji={category.emoji} size={56} />
               <View style={[styles.editBadge, { backgroundColor: theme.primaryFill, borderColor: theme.background }]}>
                 <Icon name="edit" size={12} color={theme.onPrimary} />
@@ -161,7 +155,7 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
             icon="calendar"
             label={relativeDay(draft.date, t)}
             accessibilityLabel={t('Date: {date}. Change date', { date: relativeDay(draft.date, t) })}
-            onPress={() => open('/trip/[tripId]/expense-date')}
+            onPress={() => open('/expense-date')}
           />
         </View>
 

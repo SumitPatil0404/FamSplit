@@ -5,6 +5,7 @@ import { englishT, plural, type T } from '@/i18n/translate';
 
 import { CATEGORIES, guessCategory, type Category } from './categories';
 import { expenseDescription, paidOn, type DetectedPayment } from './detected-match';
+import type { PersonalExpense } from './personal';
 import type { StoredExpense, StoredTrip } from './trips';
 
 export type SplitMode = 'equal' | 'perFamily' | 'shares' | 'exact';
@@ -101,6 +102,29 @@ export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = 
   }, notify);
 }
 
+/**
+ * A draft for a personal expense, which has no trip: only the amount, description, category and
+ * date are used, so the category and date pages work the same as for a trip expense.
+ */
+export function startPersonalDraft(existing?: PersonalExpense, payment?: DetectedPayment, notify = true) {
+  set({
+    tripId: '',
+    expenseId: existing?.id,
+    alertId: existing ? undefined : payment?.id,
+    amountText: existing ? String(existing.amount / 100) : payment ? String(payment.amount / 100) : '',
+    date: existing?.date ?? (payment ? paidOn(payment) : new Date().toISOString()),
+    description: existing?.description ?? (payment ? expenseDescription(payment) : ''),
+    categoryId: existing?.category,
+    payerId: '',
+    paidTexts: {},
+    mode: 'equal',
+    memberOn: {},
+    familyOn: {},
+    shares: {},
+    exactTexts: {},
+  }, notify);
+}
+
 /** Keeps only digits and a single decimal point with up to two decimals. */
 export function cleanAmount(text: string): string {
   const [whole, ...rest] = text.replace(/[^0-9.]/g, '').split('.');
@@ -132,11 +156,15 @@ export function sum(amounts: Record<string, Paise>): Paise {
   return Object.values(amounts).reduce((total, value) => total + value, 0);
 }
 
+/** The category picked, or until then a guess from the description. */
+export function draftCategory(draft: ExpenseDraft): Category {
+  return CATEGORIES.find((candidate) => candidate.id === draft.categoryId) ?? guessCategory(draft.description);
+}
+
 /** Everything the screens need to know about a draft, worked out in one place. */
 export function readDraft(draft: ExpenseDraft, trip: StoredTrip, t: T = englishT) {
   const amount = parseAmount(draft.amountText);
-  const category: Category =
-    CATEGORIES.find((candidate) => candidate.id === draft.categoryId) ?? guessCategory(draft.description);
+  const category = draftCategory(draft);
   const several = draft.payerId === SEVERAL;
   const paidBy: Record<string, Paise> = several ? parseAmounts(draft.paidTexts) : { [draft.payerId]: amount };
   const exactAmounts = parseAmounts(draft.exactTexts);

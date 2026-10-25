@@ -1,7 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
@@ -11,7 +10,6 @@ import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { plural, useT } from '@/i18n';
-import { useDetected } from '@/store/detected';
 import { hasSeenWelcome } from '@/store/onboarding';
 import { summarizeTrip } from '@/store/summary';
 import { createSampleTrip, deleteTrip, isFriendsTrip, useTrips, type StoredTrip } from '@/store/trips';
@@ -93,12 +91,9 @@ function TripCard({ trip }: { trip: StoredTrip }) {
 
 export default function TripsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const trips = useTrips();
   const sync = useSync();
   const t = useT();
-  const theme = useTheme();
-  const waiting = useDetected().filter((payment) => payment.status === 'new').length;
 
   // The first time FamSplit opens on a phone, explain how it works before anything else.
   useEffect(() => {
@@ -154,7 +149,7 @@ export default function TripsScreen() {
   return (
     <View style={styles.grow}>
       {header}
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]} refreshControl={refresh}>
+      <ScrollView contentContainerStyle={[styles.content, styles.roomForButton]} refreshControl={refresh}>
         <ThemedText type="title">{t('Your trips')}</ThemedText>
         {sync.error && (
           <ThemedText type="small" themeColor="negative">
@@ -170,17 +165,6 @@ export default function TripsScreen() {
             <Button label={t('Sign in')} variant="soft" compact onPress={() => router.push('/account')} style={styles.start} />
           </Card>
         )}
-        {waiting > 0 && (
-          <Pressable accessibilityRole="button" onPress={() => router.push('/detected')}>
-            <Card style={styles.row}>
-              <ThemedText style={styles.bank}>🏦</ThemedText>
-              <ThemedText type="bold" style={styles.grow}>
-                {plural(t, waiting, '{count} bank payment to sort', '{count} bank payments to sort')}
-              </ThemedText>
-              <Icon name="chevronRight" size={20} color={theme.textSecondary} />
-            </Card>
-          </Pressable>
-        )}
         {trips.map((trip) => (
           <TripCard key={trip.id} trip={trip} />
         ))}
@@ -190,13 +174,8 @@ export default function TripsScreen() {
         <ThemedText type="caption" themeColor="textSecondary" style={styles.hint}>
           {t('Press and hold a trip to delete or leave it')}
         </ThemedText>
-        <Pressable accessibilityRole="link" hitSlop={8} onPress={() => router.push('/detected')} style={styles.bankLink}>
-          <ThemedText type="smallBold" themeColor="primary">
-            {t('Bank payments')}
-          </ThemedText>
-        </Pressable>
       </ScrollView>
-      <Fab label={t('New trip')} icon="add" bottom={insets.bottom} onPress={() => router.push('/new-trip')} />
+      <Fab label={t('New trip')} icon="add" bottom={0} onPress={() => router.push('/new-trip')} />
     </View>
   );
 }
@@ -208,6 +187,10 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.three,
     gap: Spacing.three,
+  },
+  // The tab bar keeps clear of the phone's edge, so only the New trip button needs room.
+  roomForButton: {
+    paddingBottom: 96,
   },
   emptyContent: {
     flexGrow: 1,
@@ -248,12 +231,5 @@ const styles = StyleSheet.create({
   },
   hint: {
     textAlign: 'center',
-  },
-  bank: {
-    fontSize: 24,
-    lineHeight: 32,
-  },
-  bankLink: {
-    alignSelf: 'center',
   },
 });

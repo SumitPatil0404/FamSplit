@@ -39,6 +39,22 @@ export type TripSummary = ReturnType<typeof summarizeTrip>;
 
 const MONTHS = [msg('Jan'), msg('Feb'), msg('Mar'), msg('Apr'), msg('May'), msg('Jun'), msg('Jul'), msg('Aug'), msg('Sep'), msg('Oct'), msg('Nov'), msg('Dec')];
 
+/** Full month names, for the calendar and month headings. */
+export const MONTH_NAMES = [
+  msg('January'),
+  msg('February'),
+  msg('March'),
+  msg('April'),
+  msg('May'),
+  msg('June'),
+  msg('July'),
+  msg('August'),
+  msg('September'),
+  msg('October'),
+  msg('November'),
+  msg('December'),
+];
+
 export function formatDay(iso: string, t: T = englishT): string {
   const date = new Date(iso);
   return `${date.getDate()} ${t(MONTHS[date.getMonth()])}`;

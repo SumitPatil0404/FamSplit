@@ -8,21 +8,9 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { msg, useT } from '@/i18n';
 import { updateDraft, useDraft } from '@/store/expense-draft';
+import { MONTH_NAMES } from '@/store/summary';
 
-const MONTHS = [
-  msg('January'),
-  msg('February'),
-  msg('March'),
-  msg('April'),
-  msg('May'),
-  msg('June'),
-  msg('July'),
-  msg('August'),
-  msg('September'),
-  msg('October'),
-  msg('November'),
-  msg('December'),
-];
+const MONTHS = MONTH_NAMES;
 const WEEKDAYS = [msg('Su'), msg('Mo'), msg('Tu'), msg('We'), msg('Th'), msg('Fr'), msg('Sa')];
 
 const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();

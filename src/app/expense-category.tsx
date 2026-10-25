@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -7,21 +7,18 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
 import { CATEGORIES } from '@/store/categories';
-import { readDraft, updateDraft, useDraft } from '@/store/expense-draft';
-import { useTrip } from '@/store/trips';
+import { draftCategory, updateDraft, useDraft } from '@/store/expense-draft';
 
 export default function CategoryScreen() {
   const t = useT();
-  const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
   const theme = useTheme();
-  const trip = useTrip(tripId);
   const draft = useDraft();
 
-  if (!trip || !draft) {
+  if (!draft) {
     return <EmptyState emoji="🤔" title={t('Nothing to choose for')} body={t('Go back and start the expense again.')} />;
   }
-  const current = readDraft(draft, trip).category;
+  const current = draftCategory(draft);
 
   const choose = (categoryId: string) => {
     updateDraft({ categoryId });

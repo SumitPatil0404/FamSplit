@@ -12,9 +12,12 @@ export type DetectedPayment = BankAlert & {
   /** The app the alert came from, e.g. "com.google.android.apps.messaging"; unset when pasted. */
   source?: string;
   status: 'new' | 'added' | 'dismissed';
-  /** The trip it was added to. */
+  /** The trip it was added to, or PERSONAL. */
   tripId?: string;
 };
+
+/** In place of a trip id: the bank payment became a personal expense. */
+export const PERSONAL = 'personal';
 
 /** A bank SMS and a UPI app usually both report the same payment within a minute or two. */
 const SAME_PAYMENT_WINDOW_MS = 10 * 60 * 1000;

@@ -11,7 +11,7 @@ import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
 import { bankAlertsAvailable, openBankAlertSettings, useBankAlertsEnabled } from '@/notifications/bank-alerts';
-import { addDetected, markDetected, paidOn, useDetected, type DetectedPayment } from '@/store/detected';
+import { addDetected, markDetected, paidOn, PERSONAL, useDetected, type DetectedPayment } from '@/store/detected';
 import { relativeDay } from '@/store/summary';
 import { useTrips } from '@/store/trips';
 
@@ -59,6 +59,14 @@ function PaymentCard({ payment }: { payment: DetectedPayment }) {
             onPress={use}
             style={styles.grow}
           />
+          {!credit && (
+            <Button
+              label={t('Personal')}
+              variant="soft"
+              compact
+              onPress={() => router.push({ pathname: '/personal-expense', params: { alertId: payment.id } })}
+            />
+          )}
           <Button label={t('Ignore')} variant="soft" compact onPress={() => markDetected(payment.id, 'dismissed')} />
         </View>
       ) : (
@@ -67,9 +75,11 @@ function PaymentCard({ payment }: { payment: DetectedPayment }) {
             label={
               payment.status === 'dismissed'
                 ? t('Ignored')
-                : tripName
-                  ? t('Added to “{trip}”', { trip: tripName })
-                  : t('Added')
+                : payment.tripId === PERSONAL
+                  ? t('Added as personal')
+                  : tripName
+                    ? t('Added to “{trip}”', { trip: tripName })
+                    : t('Added')
             }
           />
           {payment.status === 'dismissed' && (
@@ -187,6 +197,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: Spacing.two,
     marginTop: Spacing.one,
