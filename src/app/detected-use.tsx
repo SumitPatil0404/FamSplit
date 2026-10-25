@@ -97,7 +97,7 @@ function ChooseSettleUp({ payment }: { payment: DetectedPayment }) {
               style={({ pressed }) => [styles.row, { backgroundColor: pressed ? theme.backgroundSelected : 'transparent' }]}>
               <Avatar name={name} color={color} size={36} />
               <View style={styles.grow}>
-                <ThemedText numberOfLines={1}>
+                <ThemedText numberOfLines={2}>
                   {t('{name} owes you {amount}', { name, amount: formatPaise(transfer.amount) })}
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
