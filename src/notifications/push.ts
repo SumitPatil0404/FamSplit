@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { router } from 'expo-router';
-import { Platform } from 'react-native';
+import Storage from 'expo-sqlite/kv-store';
+import { Linking, Platform } from 'react-native';
 
 import { showToast } from '@/components/toast';
 import { Colors } from '@/constants/theme';
@@ -25,11 +26,20 @@ function notifications(): Notifications {
 
 let currentToken: string | null = null;
 
+/** Set once this phone has shown the "Allow notifications?" prompt on its own. */
+const ASKED_KEY = 'famsplit.notificationsAsked.v1';
+
 /**
- * Asks for permission if needed and tells the server which phone to notify for the signed-in user.
- * Fails quietly: no permission, no Play services or no connection just means no notifications for now.
+ * When to show Android's "Allow notifications?" prompt: `once` only the first time on this phone,
+ * `now` because the person tapped Turn on, `never` only register if already allowed.
  */
-export async function registerForPush(client: SupabaseClient): Promise<void> {
+export type AskForNotifications = 'once' | 'now' | 'never';
+
+/**
+ * Tells the server which phone to notify for the signed-in user, asking for permission when `ask`
+ * says to. Fails quietly: no permission, no Play services or no connection just means no notifications for now.
+ */
+export async function registerForPush(client: SupabaseClient, ask: AskForNotifications = 'once'): Promise<void> {
   if (!supported) {
     return;
   }
@@ -51,8 +61,11 @@ export async function registerForPush(client: SupabaseClient): Promise<void> {
         lightColor: Colors.light.primary,
       });
     }
-    let { granted } = await push.getPermissionsAsync();
-    if (!granted) {
+    const current = await push.getPermissionsAsync();
+    let granted = current.granted;
+    const firstTime = Storage.getItemSync(ASKED_KEY) !== 'yes';
+    if (!granted && current.canAskAgain && (ask === 'now' || (ask === 'once' && firstTime))) {
+      Storage.setItemSync(ASKED_KEY, 'yes');
       granted = (await push.requestPermissionsAsync()).granted;
     }
     if (!granted) {
@@ -63,6 +76,30 @@ export async function registerForPush(client: SupabaseClient): Promise<void> {
   } catch (error) {
     console.warn('Push notifications are not available:', error);
   }
+}
+
+/** `blocked`: Android no longer shows the prompt, so only its settings can turn notifications on. */
+export type NotificationStatus = 'on' | 'off' | 'blocked' | 'unsupported';
+
+export async function notificationStatus(): Promise<NotificationStatus> {
+  if (!supported) {
+    return 'unsupported';
+  }
+  try {
+    const { granted, canAskAgain } = await notifications().getPermissionsAsync();
+    return granted ? 'on' : canAskAgain ? 'off' : 'blocked';
+  } catch {
+    return 'unsupported';
+  }
+}
+
+/** For the Turn on button: Android's prompt if it can still be shown, otherwise FamSplit's page in Android's settings. */
+export async function turnOnNotifications(client: SupabaseClient): Promise<void> {
+  if ((await notificationStatus()) === 'blocked') {
+    await Linking.openSettings();
+    return;
+  }
+  await registerForPush(client, 'now');
 }
 
 /** Call before signing out, while the server still knows who is asking. */

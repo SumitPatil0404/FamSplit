@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { AppState, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
@@ -11,6 +11,8 @@ import { Spacing } from '@/constants/theme';
 import { showToast } from '@/components/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { LANGUAGE_NAMES, setLanguage, useLanguage, useT, type LanguageChoice } from '@/i18n';
+import { notificationStatus, registerForPush, turnOnNotifications, type NotificationStatus } from '@/notifications/push';
+import { supabase } from '@/sync/supabase';
 import { deleteAccount, hasUnsentChanges, signInWithGoogle, signOut, syncNow, useSync } from '@/sync/sync';
 
 const PRIVACY_POLICY_URL = 'https://famsplit-75fca.web.app/privacy';
@@ -40,6 +42,71 @@ function LanguagePicker() {
           </ThemedText>
         </Pressable>
       ))}
+    </Card>
+  );
+}
+
+/**
+ * Whether this phone gets notifications, and a way to turn them on. FamSplit only asks on its own
+ * once, so this is where someone who said no can change their mind.
+ */
+function NotificationsCard() {
+  const t = useT();
+  const theme = useTheme();
+  const [status, setStatus] = useState<NotificationStatus | null>(null);
+  const shown = useRef<NotificationStatus | null>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      const next = await notificationStatus();
+      // Turned on in Android's settings while away: tell the server about this phone straight away.
+      if (next === 'on' && shown.current !== null && shown.current !== 'on' && supabase) {
+        void registerForPush(supabase, 'never');
+      }
+      shown.current = next;
+      setStatus(next);
+    };
+    void check();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void check();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  if (status === null || status === 'unsupported' || !supabase) {
+    return null;
+  }
+  const client = supabase;
+  const on = status === 'on';
+  const turnOn = async () => {
+    await turnOnNotifications(client);
+    const next = await notificationStatus();
+    shown.current = next;
+    setStatus(next);
+  };
+
+  return (
+    <Card>
+      <View style={styles.languageTitle}>
+        <Icon name="bell" size={20} color={on ? theme.positive : theme.textSecondary} />
+        <ThemedText type="bold">{on ? t('Notifications are on') : t('Notifications are off')}</ThemedText>
+      </View>
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('For changes to your trips, payment reminders, and bank payments to sort.')}
+      </ThemedText>
+      {status === 'blocked' && (
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('Android will open FamSplit’s settings. Turn on notifications there, then come back.')}
+        </ThemedText>
+      )}
+      {!on && (
+        <>
+          <View style={styles.spacer} />
+          <Button label={t('Turn on notifications')} icon="bell" variant="soft" onPress={() => void turnOn()} />
+        </>
+      )}
     </Card>
   );
 }
@@ -170,6 +237,7 @@ export default function AccountScreen() {
         <View style={styles.spacer} />
         <Button label={t('Sync now')} variant="soft" onPress={() => void syncNow()} disabled={sync.status === 'syncing'} />
       </Card>
+      <NotificationsCard />
       <Button label={t('Sign out')} variant="soft" onPress={confirmSignOut} />
 
       <View style={styles.dangerZone}>
