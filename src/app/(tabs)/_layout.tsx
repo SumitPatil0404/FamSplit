@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 
 import { Icon } from '@/components/icon';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
 
@@ -15,6 +16,7 @@ export default function TabsLayout() {
         headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.text,
         headerTitleStyle: { fontWeight: '700' },
+        headerRightContainerStyle: { paddingRight: Spacing.three },
         sceneStyle: { backgroundColor: theme.background },
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.textSecondary,
