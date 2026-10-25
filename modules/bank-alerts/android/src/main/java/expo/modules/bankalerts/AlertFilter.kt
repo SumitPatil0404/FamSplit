@@ -59,11 +59,12 @@ object AlertFilter {
     packageName in SMS_APPS && PHONE_NUMBER.matches(title.trim()) && title.count { it.isDigit() } >= 10
 
   /**
-   * The text to keep, or null if this is not a payment. A UPI app may put the name in the title and
-   * the rest in the text ("Rahul Sharma" / "paid you ₹500"), so the two are tried together as well.
+   * The text to keep, or null if this is not a payment. In an SMS app the title is only the sender
+   * ("VM-HDFCBK"), so the message is enough. A UPI app may put the name in the title and the rest in
+   * the text ("Rahul Sharma" / "paid you ₹500"), so the two are kept together when they read as one.
    */
-  fun paymentText(title: String, text: String): String? {
-    val candidates = listOf(text, "$title $text".trim())
+  fun paymentText(packageName: String, title: String, text: String): String? {
+    val candidates = if (packageName in SMS_APPS) listOf(text) else listOf("$title $text".trim(), text)
     return candidates.firstOrNull { looksLikePayment(it) }
   }
 

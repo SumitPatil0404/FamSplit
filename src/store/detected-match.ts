@@ -19,9 +19,9 @@ export type DetectedPayment = BankAlert & {
 /** A bank SMS and a UPI app usually both report the same payment within a minute or two. */
 const SAME_PAYMENT_WINDOW_MS = 10 * 60 * 1000;
 
-/** Whether `next` is a second alert for a payment already in the list. */
-export function isDuplicate(existing: DetectedPayment[], next: BankAlert & { seenAt: string }): boolean {
-  return existing.some((payment) => {
+/** The payment already in the list that `next` is a second alert for, if any. */
+export function findDuplicate(existing: DetectedPayment[], next: BankAlert & { seenAt: string }): DetectedPayment | undefined {
+  return existing.find((payment) => {
     if (payment.reference && next.reference) {
       return payment.reference === next.reference;
     }
@@ -31,6 +31,25 @@ export function isDuplicate(existing: DetectedPayment[], next: BankAlert & { see
       Math.abs(Date.parse(payment.seenAt) - Date.parse(next.seenAt)) <= SAME_PAYMENT_WINDOW_MS
     );
   });
+}
+
+export function isDuplicate(existing: DetectedPayment[], next: BankAlert & { seenAt: string }): boolean {
+  return findDuplicate(existing, next) !== undefined;
+}
+
+/**
+ * A UPI app's "You paid ₹300" and the bank's SMS for the same payment each know different things,
+ * so the second fills in whatever the first left out.
+ */
+export function fillIn(payment: DetectedPayment, other: BankAlert): DetectedPayment {
+  return {
+    ...payment,
+    party: payment.party ?? other.party,
+    upiId: payment.upiId ?? other.upiId,
+    date: payment.date ?? other.date,
+    account: payment.account ?? other.account,
+    reference: payment.reference ?? other.reference,
+  };
 }
 
 /** The day an expense from this alert is dated: the day the bank gives, or the day it was seen. */

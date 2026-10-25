@@ -1,4 +1,4 @@
-import { isDuplicate, paidOn, settleUpMatches, type DetectedPayment } from '../detected-match';
+import { fillIn, isDuplicate, paidOn, settleUpMatches, type DetectedPayment } from '../detected-match';
 import type { StoredTrip } from '../trips';
 
 // Rajesh (on this phone) paid ₹3,000 for all three, so Priya owes him ₹1,000 inside the Sharma
@@ -86,6 +86,15 @@ describe('isDuplicate', () => {
     expect(isDuplicate([first], received({ seenAt: '2026-10-24T10:04:00.000Z' }))).toBe(true);
     expect(isDuplicate([first], received({ seenAt: '2026-10-24T10:30:00.000Z' }))).toBe(false);
     expect(isDuplicate([first], received({ direction: 'debit', seenAt: '2026-10-24T10:04:00.000Z' }))).toBe(false);
+  });
+});
+
+describe('fillIn', () => {
+  it('adds what a second alert for the same payment knows, without replacing anything', () => {
+    const fromApp = received({ direction: 'debit', amount: 30000, text: 'You paid ₹300' });
+    const fromBank = { direction: 'debit' as const, amount: 30000, party: 'Zomato', reference: '881122334455', date: '2026-10-25' };
+    expect(fillIn(fromApp, fromBank)).toMatchObject({ party: 'Zomato', reference: '881122334455', date: '2026-10-25', text: 'You paid ₹300' });
+    expect(fillIn({ ...fromApp, party: 'Zomato Ltd' }, fromBank).party).toBe('Zomato Ltd');
   });
 });
 

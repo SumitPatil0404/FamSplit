@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 
 import { parseBankAlert } from '@/domain';
 
-import { isDuplicate, type DetectedPayment } from './detected-match';
+import { fillIn, findDuplicate, type DetectedPayment } from './detected-match';
 import { newId } from './trips';
 
 export { paidOn, settleUpMatches, type DetectedPayment, type SettleUpMatch } from './detected-match';
@@ -58,7 +58,9 @@ export function addDetected(text: string, options: { source?: string; seenAt?: s
     return { problem: 'notPayment' };
   }
   const seenAt = options.seenAt ?? new Date().toISOString();
-  if (isDuplicate(detected, { ...alert, seenAt })) {
+  const earlier = findDuplicate(detected, { ...alert, seenAt });
+  if (earlier) {
+    save(detected.map((payment) => (payment === earlier ? fillIn(payment, alert) : payment)));
     return { problem: 'duplicate' };
   }
   const payment: DetectedPayment = { ...alert, id: newId('alert'), seenAt, text, source: options.source, status: 'new' };

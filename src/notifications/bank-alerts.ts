@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 
 import { showToast } from '@/components/toast';
 import { formatPaise } from '@/domain';
-import { currentT } from '@/i18n';
+import { currentT, onLanguageChange } from '@/i18n';
 import { addDetected, type DetectedPayment } from '@/store/detected';
 
 import { BankAlerts, type BankAlert } from '../../modules/bank-alerts';
@@ -16,16 +16,17 @@ function keep(alert: BankAlert) {
   return addDetected(alert.text, { source: alert.source, seenAt: alert.seenAt });
 }
 
-/**
- * Takes the alerts waiting on the phone, and keeps FamSplit's own notification in the app's language.
- * Returns the ones that were new payments.
- */
+/** Keeps FamSplit's own notification in the app's language. */
+function sendTexts() {
+  const t = currentT();
+  BankAlerts?.setTexts(t('Add this payment to FamSplit?'), t('{count} payments to add to FamSplit'), t('Bank payments'));
+}
+
+/** Takes the alerts waiting on the phone, and returns the ones that were new payments. */
 function collect(): DetectedPayment[] {
   if (!BankAlerts) {
     return [];
   }
-  const t = currentT();
-  BankAlerts.setTexts(t('Add this payment to FamSplit?'), t('{count} payments to add to FamSplit'), t('Bank payments'));
   return BankAlerts.takePending().flatMap((alert) => {
     const result = keep(alert);
     return 'payment' in result ? [result.payment] : [];
@@ -40,6 +41,8 @@ export function startBankAlerts(): void {
     return;
   }
   started = true;
+  sendTexts();
+  onLanguageChange(sendTexts);
   collect();
   AppState.addEventListener('change', (state) => {
     if (state === 'active') {

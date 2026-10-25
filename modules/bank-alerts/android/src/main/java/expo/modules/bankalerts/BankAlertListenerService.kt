@@ -24,7 +24,7 @@ class BankAlertListenerService : NotificationListenerService() {
     if (AlertFilter.isFromPerson(source, title)) {
       return
     }
-    val text = AlertFilter.paymentText(title, body) ?: return
+    val text = AlertFilter.paymentText(source, title, body) ?: return
 
     val store = PendingAlerts(applicationContext)
     if (!store.remember(text, sbn.postTime)) {

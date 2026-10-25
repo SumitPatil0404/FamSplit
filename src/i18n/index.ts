@@ -51,6 +51,11 @@ function subscribe(listener: () => void) {
 
 const getState = () => state;
 
+/** Runs `listener` whenever the app's language changes, for code outside React. */
+export function onLanguageChange(listener: () => void): () => void {
+  return subscribe(listener);
+}
+
 // Android lets people change the phone's language while the app is open.
 AppState.addEventListener('change', (status) => {
   if (status === 'active' && state.choice === 'system' && phoneLanguage() !== state.language) {
