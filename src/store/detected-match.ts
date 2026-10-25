@@ -52,6 +52,25 @@ export function fillIn(payment: DetectedPayment, other: BankAlert): DetectedPaym
   };
 }
 
+/**
+ * A readable name from the part of a UPI ID before the @: "swiggy@icici" gives "Swiggy" and
+ * "rahul.sharma@okaxis" gives "Rahul Sharma". Words with digits in them, such as phone numbers and
+ * shop QR codes ("paytmqr2810050501@paytm"), are left out, which can leave nothing.
+ */
+export function nameFromUpiId(upiId: string): string {
+  return upiId
+    .split('@')[0]
+    .split(/[._-]+/)
+    .filter((word) => /^[a-z]+$/i.test(word))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/** What an expense from this alert is called to begin with: the payee, or a name from their UPI ID. */
+export function expenseDescription(payment: DetectedPayment): string {
+  return payment.party ?? (payment.upiId ? nameFromUpiId(payment.upiId) : '');
+}
+
 /** The day an expense from this alert is dated: the day the bank gives, or the day it was seen. */
 export function paidOn(payment: DetectedPayment): string {
   if (!payment.date) {

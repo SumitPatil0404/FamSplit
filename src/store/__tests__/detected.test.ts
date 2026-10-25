@@ -1,4 +1,4 @@
-import { fillIn, isDuplicate, paidOn, settleUpMatches, type DetectedPayment } from '../detected-match';
+import { expenseDescription, fillIn, isDuplicate, nameFromUpiId, paidOn, settleUpMatches, type DetectedPayment } from '../detected-match';
 import type { StoredTrip } from '../trips';
 
 // Rajesh (on this phone) paid ₹3,000 for all three, so Priya owes him ₹1,000 inside the Sharma
@@ -95,6 +95,28 @@ describe('fillIn', () => {
     const fromBank = { direction: 'debit' as const, amount: 30000, party: 'Zomato', reference: '881122334455', date: '2026-10-25' };
     expect(fillIn(fromApp, fromBank)).toMatchObject({ party: 'Zomato', reference: '881122334455', date: '2026-10-25', text: 'You paid ₹300' });
     expect(fillIn({ ...fromApp, party: 'Zomato Ltd' }, fromBank).party).toBe('Zomato Ltd');
+  });
+});
+
+describe('nameFromUpiId', () => {
+  it('turns the part before the @ into a name', () => {
+    expect(nameFromUpiId('swiggy@icici')).toBe('Swiggy');
+    expect(nameFromUpiId('rahul.sharma@okaxis')).toBe('Rahul Sharma');
+    expect(nameFromUpiId('IRCTC@ybl')).toBe('Irctc');
+    expect(nameFromUpiId('bharatpe.90012345@yesbank')).toBe('Bharatpe');
+  });
+
+  it('leaves out phone numbers and shop QR codes', () => {
+    expect(nameFromUpiId('9876543210@ybl')).toBe('');
+    expect(nameFromUpiId('paytmqr2810050501011ab12cd@paytm')).toBe('');
+  });
+});
+
+describe('expenseDescription', () => {
+  it('prefers the payee the bank names, then the UPI ID', () => {
+    expect(expenseDescription(received({ party: 'Zomato', upiId: 'zomato.order@hdfcbank' }))).toBe('Zomato');
+    expect(expenseDescription(received({ upiId: 'corn@okhdfc' }))).toBe('Corn');
+    expect(expenseDescription(received({}))).toBe('');
   });
 });
 

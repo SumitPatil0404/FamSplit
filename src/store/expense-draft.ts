@@ -4,7 +4,7 @@ import { expenseShares, toPaise, type Paise, type Split } from '@/domain';
 import { englishT, plural, type T } from '@/i18n/translate';
 
 import { CATEGORIES, guessCategory, type Category } from './categories';
-import { paidOn, type DetectedPayment } from './detected-match';
+import { expenseDescription, paidOn, type DetectedPayment } from './detected-match';
 import type { StoredExpense, StoredTrip } from './trips';
 
 export type SplitMode = 'equal' | 'perFamily' | 'shares' | 'exact';
@@ -83,7 +83,7 @@ export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = 
     alertId: existing ? undefined : payment?.id,
     amountText: existing ? String(existing.amount / 100) : payment ? String(payment.amount / 100) : '',
     date: existing?.date ?? (payment ? paidOn(payment) : new Date().toISOString()),
-    description: existing?.description ?? payment?.party ?? '',
+    description: existing?.description ?? (payment ? expenseDescription(payment) : ''),
     categoryId: existing?.category,
     payerId: existing ? (payers.length > 1 ? SEVERAL : payers[0]) : trip.meId || (trip.members[0]?.id ?? ''),
     paidTexts: existing && payers.length > 1 ? toTexts(existing.paidBy) : {},
