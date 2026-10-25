@@ -46,6 +46,7 @@ const icons = {
   openApp: { ios: 'arrow.up.right.square', android: 'open_in_new' },
   wallet: { ios: 'creditcard', android: 'account_balance_wallet' },
   cloudOff: { ios: 'icloud.slash', android: 'cloud_off' },
+  sync: { ios: 'arrow.triangle.2.circlepath', android: 'sync' },
 } satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

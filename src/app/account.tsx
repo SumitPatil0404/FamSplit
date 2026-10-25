@@ -1,56 +1,44 @@
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
-import { AppState, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { confirmDialog } from '@/components/dialog';
-import { Icon } from '@/components/icon';
+import { SettingsRow, SettingsSection } from '@/components/settings';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Checkbox, EmptyState } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
 import { showToast } from '@/components/toast';
+import { Avatar, Button, EmptyState } from '@/components/ui';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { LANGUAGE_NAMES, setLanguage, useLanguage, useT, type LanguageChoice } from '@/i18n';
+import { LANGUAGE_NAMES, useLanguage, useT } from '@/i18n';
+import { bankAlertsAvailable, useBankAlertsEnabled } from '@/notifications/bank-alerts';
 import { notificationStatus, registerForPush, turnOnNotifications, type NotificationStatus } from '@/notifications/push';
 import { supabase } from '@/sync/supabase';
-import { deleteAccount, hasUnsentChanges, signInWithGoogle, signOut, syncNow, useSync } from '@/sync/sync';
+import { deleteAccount, hasUnsentChanges, signInWithGoogle, signOut, syncNow, unsentCount, useSync } from '@/sync/sync';
 
 const PRIVACY_POLICY_URL = 'https://famsplit-75fca.web.app/privacy';
 
-const CHOICES: LanguageChoice[] = ['system', 'en', 'hi', 'mr'];
-
-/** English, Hindi or Marathi, or whatever the phone is set to. */
-function LanguagePicker() {
-  const theme = useTheme();
+/** "English", or the phone's own language when FamSplit follows the phone. */
+function LanguageRow() {
+  const router = useRouter();
   const { choice, phone, t } = useLanguage();
   return (
-    <Card style={styles.languages}>
-      <View style={styles.languageTitle}>
-        <Icon name="language" size={20} color={theme.textSecondary} />
-        <ThemedText type="bold">{t('Language')}</ThemedText>
-      </View>
-      {CHOICES.map((option) => (
-        <Pressable
-          key={option}
-          accessibilityRole="radio"
-          accessibilityState={{ selected: choice === option }}
-          onPress={() => setLanguage(option)}
-          style={styles.languageRow}>
-          <Checkbox checked={choice === option} />
-          <ThemedText style={styles.grow}>
-            {option === 'system' ? t('Same as the phone ({language})', { language: LANGUAGE_NAMES[phone] }) : LANGUAGE_NAMES[option]}
-          </ThemedText>
-        </Pressable>
-      ))}
-    </Card>
+    <SettingsRow
+      icon="language"
+      label={t('Language')}
+      value={choice === 'system' ? LANGUAGE_NAMES[phone] : LANGUAGE_NAMES[choice]}
+      opens
+      onPress={() => router.push('/language')}
+    />
   );
 }
 
 /**
- * Whether this phone gets notifications, and a way to turn them on. FamSplit only asks on its own
- * once, so this is where someone who said no can change their mind.
+ * Whether this phone gets notifications. FamSplit only asks on its own once, so this is where
+ * someone who said no can turn them on, and where someone who said yes can manage them.
  */
-function NotificationsCard() {
+function NotificationsRow() {
   const t = useT();
   const theme = useTheme();
   const [status, setStatus] = useState<NotificationStatus | null>(null);
@@ -80,7 +68,12 @@ function NotificationsCard() {
   }
   const client = supabase;
   const on = status === 'on';
-  const turnOn = async () => {
+  const press = async () => {
+    if (on) {
+      // Turning them off, or choosing which kinds, happens in Android's settings.
+      await Linking.openSettings();
+      return;
+    }
     await turnOnNotifications(client);
     const next = await notificationStatus();
     shown.current = next;
@@ -88,49 +81,58 @@ function NotificationsCard() {
   };
 
   return (
-    <Card>
-      <View style={styles.languageTitle}>
-        <Icon name="bell" size={20} color={on ? theme.positive : theme.textSecondary} />
-        <ThemedText type="bold">{on ? t('Notifications are on') : t('Notifications are off')}</ThemedText>
-      </View>
-      <ThemedText type="small" themeColor="textSecondary">
-        {t('For changes to your trips, payment reminders, and bank payments to sort.')}
-      </ThemedText>
-      {status === 'blocked' && (
-        <ThemedText type="small" themeColor="textSecondary">
-          {t('Android will open FamSplit’s settings. Turn on notifications there, then come back.')}
+    <SettingsRow
+      icon="bell"
+      label={t('Notifications')}
+      detail={
+        on
+          ? t('Trip changes, payment reminders and bank payments to sort')
+          : status === 'blocked'
+            ? t('Off. Tap to turn them on in Android’s settings.')
+            : t('Off. Tap to turn them on.')
+      }
+      trailing={
+        <ThemedText type="smallBold" style={{ color: on ? theme.positive : theme.negative }}>
+          {on ? t('On') : t('Off')}
         </ThemedText>
-      )}
-      {!on && (
-        <>
-          <View style={styles.spacer} />
-          <Button label={t('Turn on notifications')} icon="bell" variant="soft" onPress={() => void turnOn()} />
-        </>
-      )}
-    </Card>
+      }
+      onPress={() => void press()}
+    />
   );
 }
 
-function HelpLinks() {
-  const router = useRouter();
+function BankAlertsRow() {
   const t = useT();
+  const router = useRouter();
+  const enabled = useBankAlertsEnabled();
   return (
-    <View style={styles.links}>
-      <Pressable accessibilityRole="link" hitSlop={8} onPress={() => router.push('/welcome')} style={styles.link}>
-        <ThemedText type="smallBold" themeColor="primary">
-          {t('How FamSplit works')}
+    <SettingsRow
+      icon="rupee"
+      label={t('Bank payments')}
+      detail={enabled ? t('Picking up payment alerts') : t('Pick up bank payments automatically')}
+      value={enabled ? t('On') : t('Off')}
+      opens
+      onPress={() => router.push('/detected')}
+    />
+  );
+}
+
+function HelpSection() {
+  const t = useT();
+  const router = useRouter();
+  const version = Constants.expoConfig?.version;
+  return (
+    <>
+      <SettingsSection title={t('HELP')}>
+        <SettingsRow icon="help" label={t('How FamSplit works')} opens onPress={() => router.push('/welcome')} />
+        <SettingsRow icon="lock" label={t('Privacy policy')} opens onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)} />
+      </SettingsSection>
+      {version && (
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+          FamSplit {version}
         </ThemedText>
-      </Pressable>
-      <Pressable
-        accessibilityRole="link"
-        hitSlop={8}
-        onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
-        style={styles.link}>
-        <ThemedText type="smallBold" themeColor="primary">
-          {t('Privacy policy')}
-        </ThemedText>
-      </Pressable>
-    </View>
+      )}
+    </>
   );
 }
 
@@ -148,21 +150,26 @@ function SignInPrompt() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <ThemedText type="heading">{t('Share trips with your family and friends')}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {t('With an account, others can join your trips with a code, everyone sees expenses as they are added, and your trips are backed up.')}
-      </ThemedText>
-      {message && (
-        <ThemedText type="small" themeColor="negative">
-          {t(message)}
+      <View style={styles.signIn}>
+        <ThemedText type="heading">{t('Share trips with your family and friends')}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('With an account, others can join your trips with a code, everyone sees expenses as they are added, and your trips are backed up.')}
         </ThemedText>
-      )}
-      <Button label={busy ? t('Waiting for Google…') : t('Continue with Google')} icon="person" onPress={start} disabled={busy} />
-      <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
-        {t('Your Google account is only used to sign you in. FamSplit sees your name, email address and profile picture, nothing else.')}
-      </ThemedText>
-      <LanguagePicker />
-      <HelpLinks />
+        {message && (
+          <ThemedText type="small" themeColor="negative">
+            {t(message)}
+          </ThemedText>
+        )}
+        <Button label={busy ? t('Waiting for Google…') : t('Continue with Google')} icon="person" onPress={start} disabled={busy} />
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.centered}>
+          {t('Your Google account is only used to sign you in. FamSplit sees your name, email address and profile picture, nothing else.')}
+        </ThemedText>
+      </View>
+      <SettingsSection title={t('SETTINGS')}>
+        <LanguageRow />
+        {bankAlertsAvailable && <BankAlertsRow />}
+      </SettingsSection>
+      <HelpSection />
     </ScrollView>
   );
 }
@@ -170,6 +177,7 @@ function SignInPrompt() {
 export default function AccountScreen() {
   const sync = useSync();
   const t = useT();
+  const theme = useTheme();
 
   if (!sync.configured) {
     return (
@@ -184,6 +192,10 @@ export default function AccountScreen() {
   if (!sync.session) {
     return <SignInPrompt />;
   }
+
+  const { user } = sync.session;
+  const name = String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? '').trim();
+  const waiting = unsentCount();
 
   const confirmSignOut = () =>
     confirmDialog({
@@ -217,37 +229,51 @@ export default function AccountScreen() {
       },
     });
 
+  const syncDetail =
+    sync.status === 'syncing'
+      ? t('Syncing…')
+      : sync.offline
+        ? waiting > 0
+          ? t('Offline · {count} waiting', { count: waiting })
+          : t('Offline')
+        : sync.error
+          ? t(sync.error)
+          : t('Everything is synced');
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Card>
-        <ThemedText type="caption" themeColor="textSecondary">
-          {t('SIGNED IN AS')}
-        </ThemedText>
-        <ThemedText type="bold">{sync.session.user.email}</ThemedText>
-      </Card>
-      <Card>
-        <ThemedText type="bold">
-          {sync.status === 'syncing' ? t('Syncing…') : sync.status === 'error' ? t('Not fully synced') : t('Everything is synced')}
-        </ThemedText>
-        {sync.error && (
-          <ThemedText type="small" themeColor="negative">
-            {t(sync.error)}
-          </ThemedText>
-        )}
-        <View style={styles.spacer} />
-        <Button label={t('Sync now')} variant="soft" onPress={() => void syncNow()} disabled={sync.status === 'syncing'} />
-      </Card>
-      <NotificationsCard />
-      <Button label={t('Sign out')} variant="soft" onPress={confirmSignOut} />
-
-      <View style={styles.dangerZone}>
+      <View style={styles.profile}>
+        <Avatar name={name || user.email || '?'} color={theme.primary} size={72} />
+        {name !== '' && <ThemedText type="heading">{name}</ThemedText>}
         <ThemedText type="small" themeColor="textSecondary">
-          {t('Deleting your account removes your sign-in and the trips only you are on. It cannot be undone.')}
+          {user.email}
         </ThemedText>
-        <Button label={t('Delete account')} icon="delete" variant="danger" onPress={confirmDelete} />
       </View>
-      <LanguagePicker />
-      <HelpLinks />
+
+      <SettingsSection title={t('SYNC')}>
+        <SettingsRow
+          icon="sync"
+          label={sync.status === 'syncing' ? t('Syncing…') : t('Sync now')}
+          detail={syncDetail}
+          accent={sync.error ? theme.negative : undefined}
+          onPress={sync.status === 'syncing' ? undefined : () => void syncNow()}
+        />
+      </SettingsSection>
+
+      <SettingsSection title={t('SETTINGS')}>
+        <NotificationsRow />
+        <LanguageRow />
+        {bankAlertsAvailable && <BankAlertsRow />}
+      </SettingsSection>
+
+      <HelpSection />
+
+      <SettingsSection
+        title={t('ACCOUNT')}
+        footer={t('Deleting your account removes your sign-in and the trips only you are on. It cannot be undone.')}>
+        <SettingsRow icon="logout" label={t('Sign out')} onPress={confirmSignOut} />
+        <SettingsRow icon="delete" label={t('Delete account')} danger onPress={confirmDelete} />
+      </SettingsSection>
     </ScrollView>
   );
 }
@@ -255,43 +281,18 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   content: {
     padding: Spacing.three,
-    gap: Spacing.three,
+    gap: Spacing.four,
+    paddingBottom: Spacing.six,
   },
-  spacer: {
-    height: Spacing.one,
+  profile: {
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.two,
+  },
+  signIn: {
+    gap: Spacing.three,
   },
   centered: {
     textAlign: 'center',
-  },
-  links: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: Spacing.four,
-  },
-  link: {
-    paddingVertical: Spacing.one,
-  },
-  grow: {
-    flex: 1,
-  },
-  languages: {
-    gap: Spacing.one,
-  },
-  languageTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    marginBottom: Spacing.one,
-  },
-  languageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    minHeight: 44,
-  },
-  dangerZone: {
-    gap: Spacing.two,
-    marginTop: Spacing.four,
   },
 });
