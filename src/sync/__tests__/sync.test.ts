@@ -16,10 +16,13 @@ class FakeServer {
     expenses: [],
     payments: [],
     activity: [],
+    personal_expenses: [],
   };
   /** Mimics a database that has not been given update-2.sql yet. */
   missingColumns = false;
   offline = false;
+  /** Mimics a database that has not been given update-6.sql yet. */
+  noPersonalTable = false;
   /** Runs once, in the middle of the next download, to simulate someone typing during a sync. */
   duringNextSelect: (() => void) | null = null;
 
@@ -29,7 +32,7 @@ class FakeServer {
 
   private visible(table: string, userId: string): Row[] {
     const rows = this.tables[table];
-    if (table === 'trip_users') {
+    if (table === 'trip_users' || table === 'personal_expenses') {
       return rows.filter((row) => row.user_id === userId);
     }
     return rows.filter((row) => this.isTripUser(table === 'trips' ? row.id : row.trip_id, userId));
@@ -40,9 +43,17 @@ class FakeServer {
       return { data: null, error: { message: 'Network request failed' } };
     }
     const { table, action, filters } = query;
+    if (table === 'personal_expenses' && this.noPersonalTable) {
+      return { data: null, error: { message: 'relation "public.personal_expenses" does not exist' } };
+    }
     const matches = (row: Row) =>
       filters.every((filter) => (filter.values ? filter.values.includes(row[filter.column]) : row[filter.column] === filter.value));
-    const key = (row: Row) => (table === 'trips' ? row.id : `${row.trip_id}/${table === 'trip_users' ? row.user_id : row.id}`);
+    const key = (row: Row) =>
+      table === 'trips'
+        ? row.id
+        : table === 'personal_expenses'
+          ? `${row.user_id}/${row.id}`
+          : `${row.trip_id}/${table === 'trip_users' ? row.user_id : row.id}`;
 
     switch (action.type) {
       case 'select': {
@@ -59,6 +70,18 @@ class FakeServer {
           return { data: null, error: { message: "Could not find the 'upi_id' column of 'members' in the schema cache" } };
         }
         for (const row of action.rows) {
+          if (table === 'personal_expenses') {
+            if (row.user_id !== userId) {
+              return { data: null, error: { message: 'new row violates row-level security policy' } };
+            }
+            const mine = this.tables.personal_expenses.find((other) => key(other) === key(row));
+            if (mine) {
+              Object.assign(mine, row);
+            } else {
+              this.tables.personal_expenses.push({ ...row });
+            }
+            continue;
+          }
           const tripId = table === 'trips' ? row.id : row.trip_id;
           const existing = this.tables[table].find((other) => key(other) === key(row));
           if (table === 'trips' && !existing) {
@@ -114,6 +137,7 @@ class FakeServer {
       }
     }
     this.tables.trip_users = this.tables.trip_users.filter((link) => link.user_id !== userId);
+    this.tables.personal_expenses = this.tables.personal_expenses.filter((row) => row.user_id !== userId);
     return null;
   }
 
@@ -209,7 +233,7 @@ function fakeClient(server: FakeServer, userId: string) {
   };
 }
 
-type Phone = { store: typeof import('@/store/trips'); sync: typeof import('../sync') };
+type Phone = { store: typeof import('@/store/trips'); personal: typeof import('@/store/personal'); sync: typeof import('../sync') };
 
 /** A phone has its own storage and its own copy of the store and sync modules. */
 async function makePhone(server: FakeServer, userId: string): Promise<Phone> {
@@ -235,7 +259,7 @@ async function makePhone(server: FakeServer, userId: string): Promise<Phone> {
     }));
     // require() is the only way to load a fresh copy inside isolateModules.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    phone = { store: require('@/store/trips'), sync: require('../sync') };
+    phone = { store: require('@/store/trips'), personal: require('@/store/personal'), sync: require('../sync') };
   });
   phone.sync.startSync();
   await new Promise<void>((resolve) => setImmediate(() => resolve()));
@@ -483,5 +507,103 @@ describe('sync between two phones', () => {
     expect(alice.store.getTrips().map((candidate) => candidate.id)).toEqual([localOnly]);
     expect(alice.sync.isShared(tripId)).toBe(false);
     expect(server.tables.trips).toHaveLength(1);
+  });
+});
+
+describe('personal expenses', () => {
+  let server: FakeServer;
+  let phone: Phone;
+  let secondPhone: Phone;
+  let bob: Phone;
+
+  const groceries = { id: 'p1', description: 'Groceries', amount: 45000, category: 'groceries', date: '2026-10-20T06:30:00.000Z' };
+  const descriptions = (on: Phone) => on.personal.getPersonalExpenses().map((expense) => expense.description);
+
+  beforeEach(async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    server = new FakeServer();
+    phone = await makePhone(server, 'alice');
+    secondPhone = await makePhone(server, 'alice');
+    bob = await makePhone(server, 'bob');
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('reach the owner’s other phone but nobody else', async () => {
+    phone.personal.savePersonalExpense(groceries);
+    await phone.sync.syncNow();
+    await secondPhone.sync.syncNow();
+    await bob.sync.syncNow();
+
+    expect(server.tables.personal_expenses).toEqual([
+      { user_id: 'alice', id: 'p1', description: 'Groceries', amount: 45000, category: 'groceries', date: groceries.date },
+    ]);
+    expect(secondPhone.personal.getPersonalExpenses()).toEqual([groceries]);
+    expect(bob.personal.getPersonalExpenses()).toEqual([]);
+  });
+
+  it('carry edits and deletions across', async () => {
+    phone.personal.savePersonalExpense(groceries);
+    phone.personal.savePersonalExpense({ id: 'p2', description: 'Movie', amount: 30000, date: '2026-10-21T14:00:00.000Z' });
+    await phone.sync.syncNow();
+    await secondPhone.sync.syncNow();
+
+    secondPhone.personal.savePersonalExpense({ ...groceries, amount: 52000 });
+    secondPhone.personal.deletePersonalExpense('p2');
+    await secondPhone.sync.syncNow();
+    await phone.sync.syncNow();
+
+    expect(phone.personal.getPersonalExpenses()).toEqual([{ ...groceries, amount: 52000 }]);
+    expect(server.tables.personal_expenses.map((row) => row.id)).toEqual(['p1']);
+  });
+
+  it('are kept while offline and sent once back online', async () => {
+    server.offline = true;
+    phone.personal.savePersonalExpense(groceries);
+    await phone.sync.syncNow();
+    expect(phone.sync.hasUnsentChanges()).toBe(true);
+
+    server.offline = false;
+    await phone.sync.syncNow();
+    expect(phone.sync.hasUnsentChanges()).toBe(false);
+    expect(server.tables.personal_expenses).toHaveLength(1);
+  });
+
+  it('only complain about a database without update-6.sql once there is something to send', async () => {
+    server.noPersonalTable = true;
+    await phone.sync.syncNow();
+    expect(descriptions(phone)).toEqual([]);
+
+    phone.personal.savePersonalExpense(groceries);
+    await phone.sync.syncNow();
+    expect(descriptions(phone)).toEqual(['Groceries']);
+    expect(phone.sync.hasUnsentChanges()).toBe(true);
+
+    server.noPersonalTable = false;
+    await phone.sync.syncNow();
+    expect(phone.sync.hasUnsentChanges()).toBe(false);
+    expect(server.tables.personal_expenses).toHaveLength(1);
+  });
+
+  it('leave the phone on sign-out, except ones never uploaded', async () => {
+    phone.personal.savePersonalExpense(groceries);
+    await phone.sync.syncNow();
+    server.offline = true;
+    phone.personal.savePersonalExpense({ id: 'p2', description: 'Movie', amount: 30000, date: '2026-10-21T14:00:00.000Z' });
+    await phone.sync.syncNow();
+    await phone.sync.signOut();
+
+    expect(descriptions(phone)).toEqual(['Movie']);
+  });
+
+  it('go with the account when it is deleted', async () => {
+    phone.personal.savePersonalExpense(groceries);
+    await phone.sync.syncNow();
+    expect(await phone.sync.deleteAccount()).toBeNull();
+
+    expect(descriptions(phone)).toEqual([]);
+    expect(server.tables.personal_expenses).toEqual([]);
   });
 });

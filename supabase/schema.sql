@@ -450,3 +450,25 @@ create trigger activity_notify after insert on public.activity
   for each row execute function public.request_notification('activity');
 create trigger reminders_notify after insert on public.reminders
   for each row execute function public.request_notification('reminder');
+
+-- Personal expenses: spending that belongs to no trip. Only their owner can see or change them,
+-- and they go when the account is deleted.
+create table public.personal_expenses (
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  id text not null,
+  description text not null,
+  amount bigint not null check (amount > 0),
+  category text,
+  date timestamptz not null default now(),
+  primary key (user_id, id)
+);
+
+grant select, insert, update, delete on public.personal_expenses to authenticated;
+alter table public.personal_expenses enable row level security;
+
+create policy "Users manage their own personal expenses" on public.personal_expenses
+  for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+alter publication supabase_realtime add table public.personal_expenses;

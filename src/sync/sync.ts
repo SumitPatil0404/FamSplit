@@ -7,6 +7,7 @@ import { AppState } from 'react-native';
 
 import { msg } from '@/i18n/translate';
 import { registerForPush, startPushListeners, unregisterFromPush } from '@/notifications/push';
+import { setPersonalChangeListener } from '@/store/personal';
 import { applyRemoteTrips, getTrips, setLocalChangeListener, type StoredTrip } from '@/store/trips';
 
 import {
@@ -22,6 +23,7 @@ import {
   type PaymentRow,
   type TripRow,
 } from './rows';
+import { forgetPersonal, hasUnsentPersonal, pullPersonal, pushPersonal } from './personal';
 import { supabase } from './supabase';
 
 export type SyncState = {
@@ -291,14 +293,19 @@ async function run(client: SupabaseClient, userId: string) {
   try {
     let failed: Set<string>;
     let settled: boolean;
+    let personalProblem: string | null;
+    let personalSettled: boolean;
     do {
       again = false;
       failed = await push(client, userId);
+      personalProblem = await pushPersonal(client, userId);
       settled = await pull(client, userId, failed);
-    } while (again || !settled);
+      // Personal expenses that could not be sent keep their local version until they can be.
+      personalSettled = personalProblem !== null || (await pullPersonal(client));
+    } while (again || !settled || !personalSettled);
 
-    if (failed.size > 0) {
-      setState({ status: 'error', error: pushProblem });
+    if (failed.size > 0 || personalProblem) {
+      setState({ status: 'error', error: failed.size > 0 ? pushProblem : personalProblem });
       retry = setTimeout(() => void syncNow(), RETRY_MS);
     } else {
       setState({ status: 'idle', error: null });
@@ -377,6 +384,8 @@ export function startSync() {
     requestSync();
   });
 
+  setPersonalChangeListener(() => requestSync());
+
   // A notification means something changed, so fetch it straight away.
   startPushListeners(() => requestSync(0));
 
@@ -402,6 +411,7 @@ export function isShared(tripId: string): boolean {
 export function hasUnsentChanges(): boolean {
   return (
     removals.length > 0 ||
+    hasUnsentPersonal() ||
     getTrips().some((trip) => hasChanges(diffRows(bases[trip.id] && tripToRows(bases[trip.id]), tripToRows(trip))))
   );
 }
@@ -467,6 +477,7 @@ export async function signOut() {
   await supabase.auth.signOut();
   // Shared trips live on the server and come back at the next sign-in; trips never uploaded stay on the phone.
   applyRemoteTrips(getTrips().filter((trip) => !bases[trip.id]));
+  forgetPersonal();
   bases = {};
   removals = [];
   persist();
@@ -538,6 +549,7 @@ export async function deleteAccount(): Promise<string | null> {
   // The server-side session went with the account, so only this phone is left to clear.
   await supabase.auth.signOut({ scope: 'local' });
   applyRemoteTrips(getTrips().filter((trip) => !bases[trip.id]));
+  forgetPersonal();
   bases = {};
   removals = [];
   persist();
