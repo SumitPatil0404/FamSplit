@@ -1,0 +1,105 @@
+import { settleTrip, type BankAlert, type Transfer } from '@/domain';
+
+import type { StoredTrip } from './trips';
+
+/** A payment picked up from a bank or UPI alert. It stays on this phone and is never synced. */
+export type DetectedPayment = BankAlert & {
+  id: string;
+  /** When the phone saw the alert. */
+  seenAt: string;
+  /** The alert as it arrived, so the user can check what was read. */
+  text: string;
+  /** The app the alert came from, e.g. "com.google.android.apps.messaging"; unset when pasted. */
+  source?: string;
+  status: 'new' | 'added' | 'dismissed';
+  /** The trip it was added to. */
+  tripId?: string;
+};
+
+/** A bank SMS and a UPI app usually both report the same payment within a minute or two. */
+const SAME_PAYMENT_WINDOW_MS = 10 * 60 * 1000;
+
+/** Whether `next` is a second alert for a payment already in the list. */
+export function isDuplicate(existing: DetectedPayment[], next: BankAlert & { seenAt: string }): boolean {
+  return existing.some((payment) => {
+    if (payment.reference && next.reference) {
+      return payment.reference === next.reference;
+    }
+    return (
+      payment.direction === next.direction &&
+      payment.amount === next.amount &&
+      Math.abs(Date.parse(payment.seenAt) - Date.parse(next.seenAt)) <= SAME_PAYMENT_WINDOW_MS
+    );
+  });
+}
+
+/** The day an expense from this alert is dated: the day the bank gives, or the day it was seen. */
+export function paidOn(payment: DetectedPayment): string {
+  if (!payment.date) {
+    return payment.seenAt;
+  }
+  const [year, month, day] = payment.date.split('-').map(Number);
+  // Midday, so the day does not change in any time zone.
+  return new Date(year, month - 1, day, 12).toISOString();
+}
+
+export type SettleUpMatch = {
+  trip: StoredTrip;
+  transfer: Transfer;
+  /** The alert names the payer, or gives their UPI ID. */
+  byName: boolean;
+  /** The alert is for exactly what is owed. */
+  byAmount: boolean;
+};
+
+const words = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+/** "Rahul", "Rahul Sharma" and "RAHUL SHA" all name Rahul Sharma. */
+function namesMatch(memberName: string, party: string): boolean {
+  const member = words(memberName);
+  const alert = words(party);
+  if (member.length === 0 || alert.length === 0 || member[0] !== alert[0]) {
+    return false;
+  }
+  // After the first name, each further word in the alert must start a word of the member's name.
+  return alert.slice(1).every((word, index) => member[index + 1]?.startsWith(word) ?? true);
+}
+
+/**
+ * The payments still owed to this phone's owner that a credit alert could be, best match first:
+ * the right person for the right amount, then the right person, then the right amount.
+ */
+export function settleUpMatches(trips: StoredTrip[], payment: DetectedPayment): SettleUpMatch[] {
+  if (payment.direction !== 'credit') {
+    return [];
+  }
+  const matches: SettleUpMatch[] = [];
+  for (const trip of trips) {
+    if (!trip.meId) {
+      continue;
+    }
+    let settlement;
+    try {
+      settlement = settleTrip(trip);
+    } catch {
+      // Still downloading; it has no balances yet.
+      continue;
+    }
+    const owedToMe = [...settlement.betweenFamilies, ...[...settlement.withinFamily.values()].flat()].filter(
+      (transfer) => transfer.toMemberId === trip.meId,
+    );
+    for (const transfer of owedToMe) {
+      const from = trip.members.find((member) => member.id === transfer.fromMemberId);
+      const byName =
+        from !== undefined &&
+        ((payment.upiId !== undefined && from.upiId?.toLowerCase() === payment.upiId.toLowerCase()) ||
+          (payment.party !== undefined && namesMatch(from.name, payment.party)));
+      const byAmount = transfer.amount === payment.amount;
+      if (byName || byAmount) {
+        matches.push({ trip, transfer, byName, byAmount });
+      }
+    }
+  }
+  const rank = (match: SettleUpMatch) => (match.byName ? 2 : 0) + (match.byAmount ? 1 : 0);
+  return matches.sort((a, b) => rank(b) - rank(a));
+}

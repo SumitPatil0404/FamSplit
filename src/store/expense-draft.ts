@@ -4,6 +4,7 @@ import { expenseShares, toPaise, type Paise, type Split } from '@/domain';
 import { englishT, plural, type T } from '@/i18n/translate';
 
 import { CATEGORIES, guessCategory, type Category } from './categories';
+import { paidOn, type DetectedPayment } from './detected-match';
 import type { StoredExpense, StoredTrip } from './trips';
 
 export type SplitMode = 'equal' | 'perFamily' | 'shares' | 'exact';
@@ -31,6 +32,8 @@ export type ExpenseDraft = {
   familyOn: Record<string, boolean>;
   shares: Record<string, number>;
   exactTexts: Record<string, string>;
+  /** The bank payment this expense was started from, marked as added once it is saved. */
+  alertId?: string;
 };
 
 let draft: ExpenseDraft | null = null;
@@ -67,18 +70,20 @@ function toTexts(amounts: Record<string, Paise>): Record<string, string> {
 }
 
 /**
- * A fresh draft for a new expense, or one filled in from an expense being edited. While a page is
- * rendering it must not notify other components, so it passes `notify: false`.
+ * A fresh draft for a new expense, one filled in from an expense being edited, or one filled in from
+ * a bank payment. While a page is rendering it must not notify other components, so it passes
+ * `notify: false`.
  */
-export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true) {
+export function startDraft(trip: StoredTrip, existing?: StoredExpense, notify = true, payment?: DetectedPayment) {
   const payers = existing ? Object.keys(existing.paidBy).filter((id) => existing.paidBy[id] > 0) : [];
   const split = existing?.split;
   set({
     tripId: trip.id,
     expenseId: existing?.id,
-    amountText: existing ? String(existing.amount / 100) : '',
-    date: existing?.date ?? new Date().toISOString(),
-    description: existing?.description ?? '',
+    alertId: existing ? undefined : payment?.id,
+    amountText: existing ? String(existing.amount / 100) : payment ? String(payment.amount / 100) : '',
+    date: existing?.date ?? (payment ? paidOn(payment) : new Date().toISOString()),
+    description: existing?.description ?? payment?.party ?? '',
     categoryId: existing?.category,
     payerId: existing ? (payers.length > 1 ? SEVERAL : payers[0]) : trip.meId || (trip.members[0]?.id ?? ''),
     paidTexts: existing && payers.length > 1 ? toTexts(existing.paidBy) : {},

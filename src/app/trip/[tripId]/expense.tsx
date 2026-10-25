@@ -21,6 +21,7 @@ import {
   useDraft,
   type ExpenseDraft,
 } from '@/store/expense-draft';
+import { markDetected, useDetected, type DetectedPayment } from '@/store/detected';
 import { relativeDay } from '@/store/summary';
 import { isFriendsTrip, newId, saveExpense, useTrip, type StoredExpense, type StoredTrip } from '@/store/trips';
 
@@ -78,6 +79,9 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
       paidBy,
       split,
     });
+    if (draft.alertId) {
+      markDetected(draft.alertId, 'added', trip.id);
+    }
     router.back();
   };
 
@@ -191,17 +195,17 @@ function ExpenseForm({ trip, existing, draft }: { trip: StoredTrip; existing?: S
   );
 }
 
-function ExpenseEditor({ trip, existing }: { trip: StoredTrip; existing?: StoredExpense }) {
+function ExpenseEditor({ trip, existing, payment }: { trip: StoredTrip; existing?: StoredExpense; payment?: DetectedPayment }) {
   // The draft is started once when this page opens; the category, payer and split pages share it.
-  useState(() => startDraft(trip, existing, false));
+  useState(() => startDraft(trip, existing, false, payment));
   const draft = useDraft();
   const current = draft !== null && draft.tripId === trip.id && draft.expenseId === existing?.id;
   // A reload during development clears the draft; start it again rather than show an empty page.
   useEffect(() => {
     if (!current) {
-      startDraft(trip, existing);
+      startDraft(trip, existing, true, payment);
     }
-  }, [current, trip, existing]);
+  }, [current, trip, existing, payment]);
   if (!current || !draft) {
     return null;
   }
@@ -210,13 +214,20 @@ function ExpenseEditor({ trip, existing }: { trip: StoredTrip; existing?: Stored
 
 export default function ExpenseScreen() {
   const t = useT();
-  const { tripId, expenseId } = useLocalSearchParams<{ tripId: string; expenseId?: string }>();
+  const { tripId, expenseId, alertId } = useLocalSearchParams<{ tripId: string; expenseId?: string; alertId?: string }>();
   const trip = useTrip(tripId);
+  const payment = useDetected().find((candidate) => candidate.id === alertId);
 
   if (!trip) {
     return <EmptyState emoji="🤔" title={t('Trip not found')} body={t('It may have been deleted from this phone.')} />;
   }
-  return <ExpenseEditor trip={trip} existing={trip.expenses.find((expense) => expense.id === expenseId)} />;
+  return (
+    <ExpenseEditor
+      trip={trip}
+      existing={trip.expenses.find((expense) => expense.id === expenseId)}
+      payment={payment?.status === 'new' ? payment : undefined}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

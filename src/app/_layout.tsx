@@ -9,6 +9,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
 import { startSync } from '@/sync/sync';
 
+// A link straight to a screen, such as a tapped bank payment notification, still has the trips list to go back to.
+export const unstable_settings = {
+  anchor: 'index',
+};
+
 export default function RootLayout() {
   const colors = useTheme();
   const t = useT();
@@ -44,6 +49,8 @@ export default function RootLayout() {
         <Stack.Screen name="join" options={{ title: t('Join a trip'), presentation: 'modal' }} />
         <Stack.Screen name="auth-callback" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen name="welcome" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="detected" options={{ title: t('Bank payments') }} />
+        <Stack.Screen name="detected-use" options={{ title: '', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
         <Stack.Screen name="trip/[tripId]/expense" options={{ title: t('Add expense'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-details" options={{ title: '' }} />
