@@ -165,8 +165,10 @@ export function settleUpMatches(trips: StoredTrip[], payment: DetectedPayment): 
     );
     for (const transfer of owedToMe) {
       const from = trip.members.find((member) => member.id === transfer.fromMemberId);
+      // A name match is the whole debt or part of it; more than they owe is probably something else.
       const byName =
         from !== undefined &&
+        payment.amount <= transfer.amount &&
         ((payment.upiId !== undefined && from.upiId?.toLowerCase() === payment.upiId.toLowerCase()) ||
           (payment.party !== undefined && namesMatch(from.name, payment.party)));
       const byAmount = transfer.amount === payment.amount;

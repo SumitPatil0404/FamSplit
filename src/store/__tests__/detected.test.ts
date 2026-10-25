@@ -59,6 +59,10 @@ describe('settleUpMatches', () => {
     expect(owers(received({ amount: 50000, party: 'PRIYA SHA' }))).toEqual([{ from: 'm2', byName: true, byAmount: false }]);
   });
 
+  it('does not offer the right person for more than they owe', () => {
+    expect(owers(received({ amount: 240000, upiId: 'rahul@okaxis' }))).toEqual([]);
+  });
+
   it('does not take a different surname for the same person', () => {
     expect(owers(received({ amount: 50000, party: 'Rahul Kumar' }))).toEqual([]);
   });

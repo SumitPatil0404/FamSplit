@@ -182,7 +182,7 @@ function PaymentItem({ payment, expanded, onToggle }: { payment: DetectedPayment
             <>
               {best && (
                 <Pill
-                  label={t('{name} paid', { name: memberName(best.trip, best.transfer.fromMemberId) })}
+                  label={t('{name} paid', { name: memberName(best.trip, best.transfer.fromMemberId).split(' ')[0] })}
                   icon="check"
                   filled
                   onPress={() => settle(best.trip, best.transfer.fromMemberId)}
