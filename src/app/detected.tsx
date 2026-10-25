@@ -10,6 +10,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { formatPaise } from '@/domain';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
+import { bankAlertsAvailable, openBankAlertSettings, useBankAlertsEnabled } from '@/notifications/bank-alerts';
 import { addDetected, markDetected, paidOn, useDetected, type DetectedPayment } from '@/store/detected';
 import { relativeDay } from '@/store/summary';
 import { useTrips } from '@/store/trips';
@@ -80,6 +81,40 @@ function PaymentCard({ payment }: { payment: DetectedPayment }) {
   );
 }
 
+/** Whether payments are picked up from notifications, and the way to turn that on or change it. */
+function AutoReadCard() {
+  const router = useRouter();
+  const theme = useTheme();
+  const t = useT();
+  const enabled = useBankAlertsEnabled();
+
+  if (enabled) {
+    return (
+      <Card>
+        <View style={styles.row}>
+          <Icon name="checkCircle" size={22} color={theme.positive} />
+          <ThemedText type="bold" style={styles.grow}>
+            {t('Picking up payment alerts')}
+          </ThemedText>
+          <Button label={t('Change')} variant="soft" compact onPress={openBankAlertSettings} />
+        </View>
+        <ThemedText type="caption" themeColor="textSecondary">
+          {t('If payments stop showing up, allow FamSplit to run in the background in your phone’s battery settings.')}
+        </ThemedText>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <ThemedText type="bold">{t('Pick up bank payments automatically')}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('FamSplit can read bank SMS and UPI alerts as they arrive, so there is nothing to copy and paste.')}
+      </ThemedText>
+      <Button label={t('Turn on')} icon="bell" compact onPress={() => router.push('/bank-alerts-setup')} style={styles.turnOn} />
+    </Card>
+  );
+}
+
 export default function DetectedScreen() {
   const t = useT();
   const detected = useDetected();
@@ -106,6 +141,7 @@ export default function DetectedScreen() {
       <ThemedText type="small" themeColor="textSecondary">
         {t('Payments read from your bank and UPI alerts. They stay on this phone until you add one to a trip.')}
       </ThemedText>
+      {bankAlertsAvailable && <AutoReadCard />}
       {waiting.length === 0 && done.length === 0 && (
         <EmptyState
           emoji="🏦"
@@ -157,5 +193,9 @@ const styles = StyleSheet.create({
   },
   earlier: {
     marginTop: Spacing.two,
+  },
+  turnOn: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.one,
   },
 });

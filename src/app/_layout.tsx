@@ -7,6 +7,7 @@ import { ToastHost } from '@/components/toast';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
+import { startBankAlerts } from '@/notifications/bank-alerts';
 import { startSync } from '@/sync/sync';
 
 // A link straight to a screen, such as a tapped bank payment notification, still has the trips list to go back to.
@@ -20,6 +21,7 @@ export default function RootLayout() {
   const base = useColorScheme() === 'dark' ? DarkTheme : DefaultTheme;
 
   useEffect(startSync, []);
+  useEffect(startBankAlerts, []);
 
   return (
     <ThemeProvider
@@ -51,6 +53,7 @@ export default function RootLayout() {
         <Stack.Screen name="welcome" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="detected" options={{ title: t('Bank payments') }} />
         <Stack.Screen name="detected-use" options={{ title: '', presentation: 'modal' }} />
+        <Stack.Screen name="bank-alerts-setup" options={{ title: '', presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/index" options={{ title: '' }} />
         <Stack.Screen name="trip/[tripId]/expense" options={{ title: t('Add expense'), presentation: 'modal' }} />
         <Stack.Screen name="trip/[tripId]/expense-details" options={{ title: '' }} />

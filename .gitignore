@@ -13,6 +13,8 @@ expo-env.d.ts
 /android
 /ios
 .kotlin/
+# Build output of the app's own native modules
+/modules/*/android/build
 *.orig.*
 *.jks
 *.p8
