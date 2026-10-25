@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { CategoryBars } from '@/components/category-bars';
 import { Icon } from '@/components/icon';
@@ -16,6 +16,30 @@ import { monthKey, monthSummary, shiftMonth, spendingEntries, type SpendingEntry
 import { usePersonalExpenses } from '@/store/personal';
 import { MONTH_NAMES, relativeDay } from '@/store/summary';
 import { useTrips } from '@/store/trips';
+
+/** Coming back to the app after this long starts again at the current month. */
+const FORGET_MONTH_MS = 30 * 60 * 1000;
+
+/**
+ * The month being looked at. Android can keep the app in memory for hours, so after a while away
+ * it goes back to the current month instead of whichever month was open last.
+ */
+function useMonth(): [string, (month: string) => void] {
+  const current = () => monthKey(new Date().toISOString());
+  const [month, setMonth] = useState(current);
+  useEffect(() => {
+    let leftAt = 0;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        leftAt = Date.now();
+      } else if (state === 'active' && leftAt > 0 && Date.now() - leftAt > FORGET_MONTH_MS) {
+        setMonth(current());
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+  return [month, setMonth];
+}
 
 function monthLabel(key: string, t: T): string {
   const [year, month] = key.split('-').map(Number);
@@ -113,7 +137,7 @@ export default function MySpendingScreen() {
   const personal = usePersonalExpenses();
   const waiting = useDetected().filter((payment) => payment.status === 'new').length;
   const [view, setView] = useState<SpendingView>('everything');
-  const [month, setMonth] = useState(() => monthKey(new Date().toISOString()));
+  const [month, setMonth] = useMonth();
 
   const summary = monthSummary(spendingEntries(view, trips, personal), month);
   const previous = t(MONTH_NAMES[Number(shiftMonth(month, -1).split('-')[1]) - 1]);
