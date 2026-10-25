@@ -4,6 +4,7 @@ import { AppState, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { CategoryBars } from '@/components/category-bars';
 import { Icon } from '@/components/icon';
+import { SyncBanner } from '@/components/sync-banner';
 import { ThemedText } from '@/components/themed-text';
 import { CategoryTile } from '@/components/trip/expense-parts';
 import { Card, EmptyState, Fab, IconButton, Segmented } from '@/components/ui';
@@ -146,6 +147,7 @@ export default function MySpendingScreen() {
   return (
     <View style={styles.grow}>
       <ScrollView contentContainerStyle={styles.content}>
+        <SyncBanner />
         <Segmented
           options={[
             { value: 'everything', label: t('Everything') },

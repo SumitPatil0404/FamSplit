@@ -219,6 +219,15 @@ export function hasChanges(changes: TripChanges): boolean {
   );
 }
 
+/** How many separate changes a trip has waiting: rows added, changed or removed, plus a rename, finalising or who is who. */
+export function countChanges(changes: TripChanges): number {
+  const tables = [changes.families, changes.members, changes.expenses, changes.payments];
+  return (
+    tables.reduce((total, table) => total + table.upserts.length + table.deletes.length, 0) +
+    [changes.isNew, changes.renamed, changes.finalizedChanged, changes.meChanged].filter(Boolean).length
+  );
+}
+
 export function rowsToActivity(rows: ActivityRow[]): ActivityEntry[] {
   return rows
     .map((row) => ({

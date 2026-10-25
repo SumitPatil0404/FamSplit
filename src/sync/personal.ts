@@ -62,9 +62,14 @@ function setBase(next: Record<string, PersonalExpense>) {
 
 const missingTable = (message: string) => /personal_expenses|relation|schema cache|does not exist/i.test(message);
 
-export function hasUnsentPersonal(): boolean {
+/** Personal expenses added, changed or deleted on this phone that the server does not have yet. */
+export function unsentPersonalCount(): number {
   const { upserts, deletes } = diffPersonal(base, getPersonalExpenses());
-  return upserts.length > 0 || deletes.length > 0;
+  return upserts.length + deletes.length;
+}
+
+export function hasUnsentPersonal(): boolean {
+  return unsentPersonalCount() > 0;
 }
 
 /**

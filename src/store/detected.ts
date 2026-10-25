@@ -12,10 +12,14 @@ const DETECTED_KEY = 'famsplit.detected.v1';
 /** Older alerts are dropped, so the list never grows without end. */
 const KEEP_DAYS = 60;
 
+const tooOld = (payment: DetectedPayment) => Date.parse(payment.seenAt) < Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000;
+
+/** Payments older than KEEP_DAYS go when the app starts, not only when a new one arrives. */
 function load(): DetectedPayment[] {
   try {
     const raw = Storage.getItemSync(DETECTED_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const saved: DetectedPayment[] = raw ? JSON.parse(raw) : [];
+    return saved.filter((payment) => !tooOld(payment));
   } catch {
     return [];
   }
@@ -25,8 +29,7 @@ let detected = load();
 const listeners = new Set<() => void>();
 
 function save(next: DetectedPayment[]) {
-  const cutoff = Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000;
-  detected = next.filter((payment) => Date.parse(payment.seenAt) >= cutoff);
+  detected = next.filter((payment) => !tooOld(payment));
   Storage.setItemSync(DETECTED_KEY, JSON.stringify(detected));
   listeners.forEach((listener) => listener());
 }

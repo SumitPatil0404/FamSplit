@@ -390,6 +390,23 @@ describe('sync between two phones', () => {
     expect(alice.sync.hasUnsentChanges()).toBe(false);
   });
 
+  it('counts what is waiting while offline, and says it is offline rather than failing', async () => {
+    expect(alice.sync.unsentCount()).toBe(0);
+    server.offline = true;
+    const payer = trip(alice)!.meId;
+    alice.store.saveExpense(tripId, dinner('d1', payer));
+    alice.store.saveExpense(tripId, dinner('d2', payer));
+    await alice.sync.syncNow();
+
+    expect(alice.sync.unsentCount()).toBe(2);
+    expect(alice.sync.getSyncState()).toMatchObject({ status: 'error', offline: true });
+
+    server.offline = false;
+    await alice.sync.syncNow();
+    expect(alice.sync.unsentCount()).toBe(0);
+    expect(alice.sync.getSyncState()).toMatchObject({ status: 'idle', offline: false, error: null });
+  });
+
   it('lets a joiner leave without deleting the trip for the creator', async () => {
     await bob.sync.joinTrip(trip(alice)!.inviteCode);
     bob.store.deleteTrip(tripId);

@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 
 import { confirmDialog } from '@/components/dialog';
 import { Icon } from '@/components/icon';
+import { SyncBanner } from '@/components/sync-banner';
 import { ThemedText } from '@/components/themed-text';
 import { BalancePill, Button, Card, EmptyState, Fab, IconButton, Tag } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
@@ -151,11 +152,7 @@ export default function TripsScreen() {
       {header}
       <ScrollView contentContainerStyle={[styles.content, styles.roomForButton]} refreshControl={refresh}>
         <ThemedText type="title">{t('Your trips')}</ThemedText>
-        {sync.error && (
-          <ThemedText type="small" themeColor="negative">
-            {t(sync.error)}
-          </ThemedText>
-        )}
+        <SyncBanner />
         {sync.configured && !sync.session && (
           <Card>
             <ThemedText type="bold">{t('Travelling with others?')}</ThemedText>

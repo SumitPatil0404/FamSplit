@@ -11,6 +11,7 @@ import { setPersonalChangeListener } from '@/store/personal';
 import { applyRemoteTrips, getTrips, setLocalChangeListener, type StoredTrip } from '@/store/trips';
 
 import {
+  countChanges,
   diffRows,
   hasChanges,
   rowsToActivity,
@@ -23,7 +24,7 @@ import {
   type PaymentRow,
   type TripRow,
 } from './rows';
-import { forgetPersonal, hasUnsentPersonal, pullPersonal, pushPersonal } from './personal';
+import { forgetPersonal, hasUnsentPersonal, pullPersonal, pushPersonal, unsentPersonalCount } from './personal';
 import { supabase } from './supabase';
 
 export type SyncState = {
@@ -32,6 +33,8 @@ export type SyncState = {
   session: Session | null;
   status: 'idle' | 'syncing' | 'error';
   error: string | null;
+  /** The last sync could not reach the server at all, as opposed to failing there. */
+  offline: boolean;
 };
 
 type Removal = { tripId: string; mode: 'delete' | 'leave' };
@@ -59,7 +62,7 @@ function persist() {
   Storage.setItemSync(REMOVALS_KEY, JSON.stringify(removals));
 }
 
-let state: SyncState = { configured: supabase !== null, session: null, status: 'idle', error: null };
+let state: SyncState = { configured: supabase !== null, session: null, status: 'idle', error: null, offline: false };
 const listeners = new Set<() => void>();
 
 function setState(patch: Partial<SyncState>) {
@@ -76,6 +79,11 @@ function subscribe(listener: () => void) {
 
 const getState = () => state;
 
+/** The same as useSync, for code outside React. */
+export function getSyncState(): SyncState {
+  return state;
+}
+
 export function useSync(): SyncState {
   return useSyncExternalStore(subscribe, getState, getState);
 }
@@ -88,9 +96,14 @@ const FRIENDLY: [RegExp, string][] = [
   [/rate limit|too many/i, msg('Too many attempts. Wait a few minutes and try again.')],
 ];
 
+const errorText = (error: unknown) =>
+  error instanceof Error ? error.message : String((error as { message?: string })?.message ?? error);
+
+const isNetworkError = (error: unknown) => /network|fetch|timed? ?out/i.test(errorText(error));
+
 function describe(error: unknown): string {
-  const message = error instanceof Error ? error.message : String((error as { message?: string })?.message ?? error);
-  if (/network|fetch|timed? ?out/i.test(message)) {
+  const message = errorText(error);
+  if (isNetworkError(error)) {
     return msg('Can’t reach the server. Changes are saved on this phone and will sync later.');
   }
   return FRIENDLY.find(([pattern]) => pattern.test(message))?.[1] ?? message;
@@ -305,13 +318,13 @@ async function run(client: SupabaseClient, userId: string) {
     } while (again || !settled || !personalSettled);
 
     if (failed.size > 0 || personalProblem) {
-      setState({ status: 'error', error: failed.size > 0 ? pushProblem : personalProblem });
+      setState({ status: 'error', error: failed.size > 0 ? pushProblem : personalProblem, offline: false });
       retry = setTimeout(() => void syncNow(), RETRY_MS);
     } else {
-      setState({ status: 'idle', error: null });
+      setState({ status: 'idle', error: null, offline: false });
     }
   } catch (error) {
-    setState({ status: 'error', error: describe(error) });
+    setState({ status: 'error', error: describe(error), offline: isNetworkError(error) });
     retry = setTimeout(() => void syncNow(), RETRY_MS);
   }
 }
@@ -406,6 +419,18 @@ export function startSync() {
 /** True when this trip is on the server, so other families can join it. */
 export function isShared(tripId: string): boolean {
   return bases[tripId] !== undefined;
+}
+
+/** How many changes made on this phone have not reached the server yet. */
+export function unsentCount(): number {
+  return (
+    removals.length +
+    unsentPersonalCount() +
+    getTrips().reduce(
+      (total, trip) => total + countChanges(diffRows(bases[trip.id] && tripToRows(bases[trip.id]), tripToRows(trip))),
+      0,
+    )
+  );
 }
 
 export function hasUnsentChanges(): boolean {

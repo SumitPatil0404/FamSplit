@@ -19,22 +19,32 @@
 <body>
 <main>
   <h1>FamSplit privacy policy</h1>
-  <p class="muted">Effective 13 October 2026</p>
+  <p class="muted">Effective 25 October 2026</p>
 
-  <p>FamSplit is an app for splitting trip expenses between families. It is made and run by Sumit Patil, an individual developer. This page explains what information the app handles, why, and what you can do about it.</p>
+  <p>FamSplit is an app for splitting trip expenses between families and friends, and for keeping track of your own spending. It is made and run by Sumit Patil, an individual developer. This page explains what information the app handles, why, and what you can do about it.</p>
 
   <h2>What FamSplit collects</h2>
   <ul>
     <li><strong>Your Google account details.</strong> When you sign in with Google, FamSplit receives your name, email address and profile picture address. It uses your email to recognise you; it does not get your Google password or access to anything else in your Google account.</li>
     <li><strong>What you put into trips.</strong> Trip names, family names, the names of the people on a trip, expenses (what they were for, the amounts, who paid and how they are split), payments marked as paid, and UPI IDs if someone chooses to add one.</li>
+    <li><strong>Personal expenses.</strong> Expenses you add for yourself outside any trip: what they were for, the amount, the category and the date. They are stored with your account, so they are backed up and appear on your other phones, and only you can see them.</li>
     <li><strong>A record of changes.</strong> For shared trips, FamSplit keeps a log of who added, changed or deleted expenses and payments, so that everyone on the trip can see what happened.</li>
     <li><strong>A notification address for your phone.</strong> If you allow notifications, FamSplit stores a token that lets it send notifications to your device.</li>
+  </ul>
+
+  <h2>Bank and payment alerts (Android, only if you turn them on)</h2>
+  <p>On Android you can let FamSplit read your notifications, so it can pick up payments from bank SMS and from UPI apps such as Google Pay and PhonePe. This stays off until you turn it on in the app, read what it does, and allow notification access for FamSplit in Android's settings.</p>
+  <ul>
+    <li><strong>What is read.</strong> Notifications that look like a payment: the amount, who it was paid to or from, the date, the last digits of the account or card, the reference number, and the text of the alert.</li>
+    <li><strong>What is ignored.</strong> Every other notification is dropped as soon as it arrives and is never saved. That includes everything from chat apps such as WhatsApp, whose notifications are not even opened, SMS from personal phone numbers, one-time passwords and offers.</li>
+    <li><strong>Where it stays.</strong> The payments FamSplit picks up are kept only on your phone, for up to 60 days. They are not sent to FamSplit's servers or to anyone else. If you add one to a trip or save it as a personal expense, only that expense is saved, like any other expense.</li>
+    <li><strong>Turning it off.</strong> You can turn off notification access for FamSplit in Android's settings at any time. Nothing new is read after that.</li>
   </ul>
 
   <h2>What FamSplit does not collect</h2>
   <ul>
     <li>Your location, contacts, photos or files.</li>
-    <li>Bank, card or payment details. FamSplit never handles money: "Pay with UPI" only opens your own UPI app with the details filled in.</li>
+    <li>Bank, card or payment account details. FamSplit never handles money: "Pay with UPI" only opens your own UPI app with the details filled in, and payment alerts it reads stay on your phone.</li>
     <li>Advertising or tracking data. There are no ads and no analytics tools in the app.</li>
   </ul>
 
@@ -43,6 +53,7 @@
 
   <h2>Who can see your information</h2>
   <ul>
+    <li><strong>Only you</strong> can see your personal expenses and the bank payments FamSplit picks up on your phone.</li>
     <li><strong>The people on your trips.</strong> Everyone who joins a trip with its invite code can see everything in that trip, including names, expenses, payments, UPI IDs and the record of changes. Only share an invite code with people you want on the trip.</li>
     <li><strong>Nobody else.</strong> Your information is not sold, and it is not shared with advertisers.</li>
   </ul>
@@ -50,18 +61,19 @@
   <h2>Services FamSplit relies on</h2>
   <p>FamSplit uses these companies to run. They process information on FamSplit's behalf:</p>
   <ul>
-    <li><strong>Supabase</strong> stores accounts and trip data and runs the app's server code.</li>
+    <li><strong>Supabase</strong> stores accounts, trips and personal expenses, and runs the app's server code.</li>
     <li><strong>Google</strong> provides sign-in, delivers notifications through Firebase Cloud Messaging, and hosts this website.</li>
   </ul>
-  <p>Information travels between the app and these services over encrypted connections. A copy of your trips is also kept on your phone so the app works without a connection.</p>
+  <p>Information travels between the app and these services over encrypted connections. A copy of your trips and personal expenses is also kept on your phone so the app works without a connection.</p>
 
   <h2>How long information is kept</h2>
-  <p>Your account and trips are kept until you delete them. Deleting a trip removes it, with its expenses and payments, for everyone on it.</p>
+  <p>Your account, trips and personal expenses are kept until you delete them. Deleting a trip removes it, with its expenses and payments, for everyone on it. Bank payments picked up on your phone are removed from it after 60 days.</p>
 
   <h2>Deleting your account</h2>
   <p>You can delete your account at any time, either in the app under Account, or on the <a href="/delete-account">account deletion page</a>. When you do:</p>
   <ul>
     <li>Your sign-in and your phone's notification token are removed.</li>
+    <li>Your personal expenses are deleted.</li>
     <li>Trips that only you are on are deleted.</li>
     <li>Trips you share with other families stay for them, and the name you used on those trips stays visible to them.</li>
   </ul>
